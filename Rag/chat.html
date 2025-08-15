@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>المساعد القانوني للتعليم العالي - محادثة</title>
+    <style>
+        :root {
+            --primary: #005e7c;
+            --secondary: #00a896;
+            --accent: #f9c80e;
+            --light: #f6f7f9;
+            --dark: #2d3142;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --gradient: linear-gradient(135deg, var(--primary), var(--secondary));
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Tajawal', 'Cairo', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #e4f1fe, #d4e6f1);
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Background animation */
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .bg-shape {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.4;
+        }
+
+        .bg-shape-1 {
+            background: var(--secondary);
+            width: 500px;
+            height: 500px;
+            right: -100px;
+            top: -100px;
+            animation: float-slow 15s infinite alternate;
+        }
+
+        .bg-shape-2 {
+            background: var(--primary);
+            width: 400px;
+            height: 400px;
+            left: -100px;
+            bottom: -100px;
+            animation: float-slow 20s infinite alternate-reverse;
+        }
+
+        .bg-shape-3 {
+            background: var(--accent);
+            width: 300px;
+            height: 300px;
+            right: 30%;
+            bottom: 20%;
+            animation: float-slow 18s infinite alternate;
+        }
+
+        @keyframes float-slow {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+            100% {
+                transform: translate(100px, 50px) scale(1.2);
+            }
+        }
+
+        /* Header */
+        header {
+            background: var(--gradient);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            position: relative;
+            z-index: 10;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .logo img {
+            height: 50px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .back-btn {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1rem;
+            font-weight: bold;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            transform: translateX(-3px);
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 1000px;
+            height: calc(100vh - 150px);
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            position: relative;
+            animation: fadeInUp 0.8s;
+        }
+
+        .chat-header {
+            background: var(--gradient);
+            color: white;
+            padding: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chat-header img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-header h2 {
+            font-size: 1.5rem;
+            flex: 1;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            background-color: rgba(246, 247, 249, 0.8);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .message {
+            display: flex;
+            gap: 0.8rem;
+            max-width: 80%;
+            animation: fadeInMessage 0.5s;
+        }
+
+        @keyframes fadeInMessage {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-message {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .bot-message {
+            align-self: flex-start;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            align-self: flex-end;
+        }
+
+        .user-avatar {
+            background-color: var(--accent);
+            color: var(--dark);
+        }
+
+        .message-content {
+            padding: 1rem;
+            border-radius: 15px;
+            position: relative;
+        }
+
+        .user-message .message-content {
+            background-color: #e3f2fd;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 5px;
+            border-top-right-radius: 15px;
+            border-top-left-radius: 15px;
+        }
+
+        .bot-message .message-content {
+            background-color: white;
+            border-bottom-right-radius: 15px;
+            border-bottom-left-radius: 5px;
+            border-top-right-radius: 15px;
+            border-top-left-radius: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .message-content p {
+            margin-bottom: 0.3rem;
+            line-height: 1.6;
+        }
+
+        .message-time {
+            font-size: 0.7rem;
+            color: #999;
+            text-align: left;
+            margin-top: 0.3rem;
+        }
+
+        .bot-typing {
+            display: flex;
+            gap: 0.3rem;
+            padding: 0.5rem;
+            align-self: flex-start;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .bot-typing.visible {
+            opacity: 1;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            animation: typingAnimation 1.5s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typingAnimation {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .chat-input-container {
+            padding: 1.2rem;
+            background-color: white;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            position: relative;
+        }
+
+        .chat-input input {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border: 1px solid #ddd;
+            border-radius: 50px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .chat-input input:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 2px rgba(0, 168, 150, 0.2);
+        }
+
+        .input-actions {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .input-action-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: none;
+            background-color: transparent;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #777;
+            transition: all 0.3s;
+        }
+
+        .input-action-btn:hover {
+            background-color: #f0f0f0;
+            color: var(--primary);
+        }
+
+        .send-btn {
+            padding: 1rem 2rem;
+            background: var(--gradient);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 3px 10px rgba(0, 94, 124, 0.3);
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 94, 124, 0.4);
+        }
+
+        .send-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Floating action buttons */
+        .floating-actions {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            animation: fadeInLeft 1s;
+        }
+
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translate(-20px, -50%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(0, -50%);
+            }
+        }
+
+        .floating-action-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            background-color: white;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--primary);
+            transition: all 0.3s;
+        }
+
+        .floating-action-btn:hover {
+            background-color: var(--primary);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        /* Quick suggestions */
+        .quick-suggestions {
+            padding: 1rem;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .suggestion-chip {
+            padding: 0.5rem 1rem;
+            background-color: #e3f2fd;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            animation: fadeInUp 0.5s;
+            animation-fill-mode: both;
+        }
+
+        .suggestion-chip:nth-child(1) { animation-delay: 0.1s; }
+        .suggestion-chip:nth-child(2) { animation-delay: 0.2s; }
+        .suggestion-chip:nth-child(3) { animation-delay: 0.3s; }
+        .suggestion-chip:nth-child(4) { animation-delay: 0.4s; }
+
+        .suggestion-chip:hover {
+            background-color: var(--secondary);
+            color: white;
+            transform: translateY(-3px);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Icons */
+        .icon {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            stroke-width: 0;
+            stroke: currentColor;
+            fill: currentColor;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 1rem;
+            }
+
+            .chat-container {
+                height: calc(100vh - 100px);
+                border-radius: 15px;
+            }
+
+            .floating-actions {
+                display: none;
+            }
+
+            .message {
+                max-width: 95%;
+            }
+        }
+
+        /* Particles */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: floatParticle 20s infinite linear;
+        }
+
+        @keyframes floatParticle {
+            0% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-500px) translateX(100px);
+                opacity: 0;
+            }
+        }
+
+        /* Settings modal */
+        .settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .settings-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .settings-modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .settings-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-modal-title {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .settings-modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #777;
+        }
+
+        .settings-option {
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-option-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .settings-option-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .settings-option-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .settings-option-btn.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .settings-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .settings-modal-btn {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .settings-modal-btn.cancel {
+            background-color: #f0f0f0;
+            color: #555;
+        }
+
+        .settings-modal-btn.save {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        /* Message actions */
+        .message-actions {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            display: flex;
+            gap: 5px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .message-content:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message-action-btn {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            border: none;
+            background-color: rgba(0, 0, 0, 0.1);
+            color: #555;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .message-action-btn:hover {
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+
+        .user-message .message-action-btn:hover {
+            background-color: rgba(233, 180, 0, 0.2);
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="animated-bg">
+        <div class="bg-shape bg-shape-1"></div>
+        <div class="bg-shape bg-shape-2"></div>
+        <div class="bg-shape bg-shape-3"></div>
+    </div>
+
+    <div class="particles" id="particles"></div>
+
+    <!-- Settings Modal -->
+    <div class="settings-modal" id="settings-modal">
+        <div class="settings-modal-content">
+            <div class="settings-modal-header">
+                <h3 class="settings-modal-title">إعدادات المحادثة</h3>
+                <button class="settings-modal-close" id="settings-close-btn">×</button>
+            </div>
+            
+            <div class="settings-option">
+                <span class="settings-option-title">لغة الردود:</span>
+                <div class="settings-option-group">
+                    <button class="settings-option-btn active" data-lang="ar">العربية</button>
+                    <button class="settings-option-btn" data-lang="en">الإنجليزية</button>
+                </div>
+            </div>
+            
+            <div class="settings-option">
+                <span class="settings-option-title">مظهر المحادثة:</span>
+                <div class="settings-option-group">
+                    <button class="settings-option-btn active" data-theme="light">فاتح</button>
+                    <button class="settings-option-btn" data-theme="dark">داكن</button>
+                </div>
+            </div>
+            
+            <div class="settings-modal-footer">
+                <button class="settings-modal-btn cancel" id="settings-cancel-btn">إلغاء</button>
+                <button class="settings-modal-btn save" id="settings-save-btn">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <header>
+        <div class="logo">
+            <img src="./logo.png" alt="شعار وزارة التعليم العالي">
+            <h1>المساعد القانوني للتعليم العالي</h1>
+        </div>
+        <a href="/" class="back-btn">
+            <span class="icon">←</span>
+            العودة للرئيسية
+        </a>
+    </header>
+
+    <div class="main-content">
+        <div class="floating-actions">
+            <button class="floating-action-btn" id="clear-chat-btn" title="مسح المحادثة">
+                <span class="icon">🗑️</span>
+            </button>
+            <button class="floating-action-btn" id="download-chat-btn" title="تحميل المحادثة">
+                <span class="icon">⬇️</span>
+            </button>
+            <button class="floating-action-btn" id="settings-btn" title="إعدادات">
+                <span class="icon">⚙️</span>
+            </button>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-header">
+                <img src="./ai.jpg" alt="صورة المساعد">
+                <h2>المساعد القانوني الذكي</h2>
+                <div class="status">
+                    <span class="status-indicator"></span>
+                    متصل
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <!-- No hardcoded welcome message -->
+            </div>
+
+            <div class="bot-typing" id="bot-typing">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+
+            <div class="quick-suggestions">
+                <div class="suggestion-chip">ما هي شروط التسجيل في الدكتوراه؟</div>
+                <div class="suggestion-chip">كيفية الحصول على المنحة الجامعية</div>
+                <div class="suggestion-chip">إجراءات التحويل بين الجامعات</div>
+                <div class="suggestion-chip">قوانين البحث العلمي</div>
+            </div>
+
+            <div class="chat-input-container">
+                <div class="chat-input">
+                    <input type="text" id="user-input" placeholder="اكتب سؤالك هنا..." aria-label="اكتب سؤالك">
+                    <div class="input-actions">
+                        <button class="input-action-btn" title="إرفاق ملف">
+                            <span class="icon">📎</span>
+                        </button>
+                    </div>
+                </div>
+                <button class="send-btn" id="send-btn">إرسال</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Particle animation
+        function createParticles() {
+            const particlesContainer = document.getElementById('particles');
+            const particleCount = 50;
+            
+            // Clear existing particles
+            particlesContainer.innerHTML = '';
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                
+                // Random position
+                const posX = Math.random() * window.innerWidth;
+                const posY = Math.random() * window.innerHeight;
+                
+                // Random size
+                const size = Math.random() * 4 + 2;
+                
+                // Random animation duration
+                const duration = Math.random() * 15 + 10;
+                
+                // Random delay
+                const delay = Math.random() * 10;
+                
+                // Random opacity
+                const opacity = Math.random() * 0.5 + 0.3;
+                
+                particle.style.left = posX + 'px';
+                particle.style.top = posY + 'px';
+                particle.style.width = size + 'px';
+                particle.style.height = size + 'px';
+                particle.style.animationDuration = duration + 's';
+                particle.style.animationDelay = delay + 's';
+                particle.style.opacity = opacity;
+                
+                // Random color based on theme
+                const colors = appSettings.theme === 'dark' 
+                    ? ['rgba(0, 168, 150, 0.5)', 'rgba(249, 200, 14, 0.5)', 'rgba(255, 255, 255, 0.5)']
+                    : ['rgba(0, 94, 124, 0.5)', 'rgba(0, 168, 150, 0.5)', 'rgba(249, 200, 14, 0.5)'];
+                
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                particlesContainer.appendChild(particle);
+            }
+        }
+
+        // DOM Elements
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const chatMessages = document.getElementById('chat-messages');
+        const botTyping = document.getElementById('bot-typing');
+        const suggestionChips = document.querySelectorAll('.suggestion-chip');
+        const clearChatBtn = document.getElementById('clear-chat-btn');
+        const downloadChatBtn = document.getElementById('download-chat-btn');
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const settingsCloseBtn = document.getElementById('settings-close-btn');
+        const settingsCancelBtn = document.getElementById('settings-cancel-btn');
+        const settingsSaveBtn = document.getElementById('settings-save-btn');
+
+        // App settings
+        const appSettings = {
+            language: 'ar',
+            theme: 'light',
+            sessionId: generateSessionId()
+        };
+
+        // Generate unique session ID
+        function generateSessionId() {
+            return 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Load settings from localStorage
+        function loadSettings() {
+            try {
+                const savedSettings = localStorage.getItem('chatSettings');
+                if (savedSettings) {
+                    const parsedSettings = JSON.parse(savedSettings);
+                    Object.assign(appSettings, parsedSettings);
+                }
+                updateSettingsUI();
+            } catch (e) {
+                console.error('Error loading settings:', e);
+                localStorage.removeItem('chatSettings');
+            }
+        }
+
+        // Save settings to localStorage
+        function saveSettings() {
+            try {
+                localStorage.setItem('chatSettings', JSON.stringify(appSettings));
+            } catch (e) {
+                console.error('Error saving settings:', e);
+            }
+        }
+
+        // Update settings UI
+        function updateSettingsUI() {
+            // Language
+            document.querySelectorAll('[data-lang]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.lang === appSettings.language);
+            });
+            
+            // Theme
+            document.querySelectorAll('[data-theme]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === appSettings.theme);
+            });
+            
+            // Apply theme
+            document.body.classList.toggle('dark-theme', appSettings.theme === 'dark');
+            createParticles(); // Recreate particles with new theme colors
+        }
+
+        // API Integration Functions
+        async function sendTextMessage(message) {
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: message,
+                        session_id: appSettings.sessionId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+                
+                const data = await response.json();
+                hideTypingIndicator();
+                
+                if (data.answer) {
+                    addMessage(data.answer, false);
+                } else {
+                    addMessage("لم يتم العثور على إجابة مناسبة.", false);
+                }
+            } catch (err) {
+                hideTypingIndicator();
+                console.error('Error sending message:', err);
+                addMessage("حدث خطأ أثناء معالجة السؤال.", false);
+            }
+        }
+
+        // Message handling
+        function addMessage(text, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = `message-avatar ${isUser ? 'user-avatar' : ''}`;
+            avatarDiv.textContent = isUser ? 'أنت' : 'م';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            const textParagraph = document.createElement('p');
+            textParagraph.textContent = text;
+            contentDiv.appendChild(textParagraph);
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            const now = new Date();
+            timeDiv.textContent = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            contentDiv.appendChild(timeDiv);
+            
+            messageDiv.appendChild(avatarDiv);
+            messageDiv.appendChild(contentDiv);
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            botTyping.classList.add('visible');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            botTyping.classList.remove('visible');
+        }
+
+        // Event listeners
+        sendBtn.addEventListener('click', () => {
+            const message = userInput.value.trim();
+            if (message) {
+                addMessage(message, true);
+                userInput.value = '';
+                sendTextMessage(message);
+            }
+        });
+
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendBtn.click();
+            }
+        });
+
+        suggestionChips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                const text = chip.textContent;
+                addMessage(text, true);
+                sendTextMessage(text);
+            });
+        });
+
+        function clearChat() {
+            chatMessages.innerHTML = '';
+            // Generate new session ID when clearing chat
+            appSettings.sessionId = generateSessionId();
+            addMessage("مرحباً بك مجدداً! كيف يمكنني مساعدتك اليوم؟", false);
+        }
+
+        function downloadChat() {
+            const chatText = Array.from(chatMessages.children)
+                .map(message => {
+                    const isUser = message.classList.contains('user-message');
+                    const sender = isUser ? 'أنت' : 'المساعد';
+                    const content = message.querySelector('.message-content p').textContent;
+                    return `${sender}: ${content}`;
+                })
+                .join('\n\n');
+            
+            const blob = new Blob([chatText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `محادثة-المساعد-القانوني-${new Date().toISOString().slice(0,10)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        clearChatBtn.addEventListener('click', clearChat);
+        downloadChatBtn.addEventListener('click', downloadChat);
+
+        settingsBtn.addEventListener('click', () => {
+            settingsModal.classList.add('active');
+        });
+
+        settingsCloseBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('active');
+            loadSettings(); // Revert any unsaved changes
+        });
+
+        settingsCancelBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('active');
+            loadSettings();
+        });
+
+        settingsSaveBtn.addEventListener('click', () => {
+            saveSettings();
+            settingsModal.classList.remove('active');
+            addMessage("تم حفظ الإعدادات بنجاح.", false);
+        });
+
+        document.querySelectorAll('[data-lang]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                appSettings.language = btn.dataset.lang;
+                document.querySelectorAll('[data-lang]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        document.querySelectorAll('[data-theme]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                appSettings.theme = btn.dataset.theme;
+                document.querySelectorAll('[data-theme]').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.body.classList.toggle('dark-theme', appSettings.theme === 'dark');
+                createParticles();
+            });
+        });
+
+        // Initialize the app
+        function init() {
+            // Load settings first
+            loadSettings();
+            
+            // Create particles
+            createParticles();
+            
+            // Add welcome message
+            setTimeout(() => {
+                addMessage("مرحباً بك في المساعد القانوني لوزارة التعليم العالي! كيف يمكنني مساعدتك اليوم؟", false);
+            }, 500);
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                createParticles();
+            });
+        }
+
+        // Start the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
