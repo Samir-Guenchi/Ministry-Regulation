@@ -573,40 +573,58 @@
     addUserBubble(question);
     addThinking();
 
-    const steps = [
-      'Routing query intent… [I1]',
-      'Classifying authority (metadata-only)… [I2]',
-      'Running BM25 + Dense retrieval in parallel…',
-      'Self-reflection: scoring evidence relevance…',
-      'Detecting temporal supersessions… [I3]',
-      'Advocate agent arguing… [I4]',
-      'Devil\'s Advocate challenging… [I4]',
-      'Judge synthesising final answer via Gemini…',
-      'Tracking token costs… [I5]',
-    ];
-    let stepIdx = 0;
-    const stepTimer = setInterval(() => {
-      if (stepIdx < steps.length) updateThinking(steps[stepIdx++]);
-    }, 900);
-
     try {
       const lang = selectedLang === 'auto' ? undefined : selectedLang;
-      const resp = await fetch('/api/ask', {
+
+      // [W12] SSE streaming via fetch + ReadableStream.
+      // Real progress messages arrive from the pipeline as it runs —
+      // zero dead silence, zero fake timers.
+      const response = await fetch('/api/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question, language: lang })
       });
-      clearInterval(stepTimer);
-      removeThinking();
 
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        addErrorBubble(data.error || 'Server error');
-      } else {
-        addBotBubble(data);
+      if (!response.ok) {
+        removeThinking();
+        addErrorBubble('Server error — please try again.');
+        return;
+      }
+
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();                    // keep any incomplete trailing chunk
+
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue;
+          let evt;
+          try { evt = JSON.parse(part.slice(6)); } catch { continue; }
+
+          if (evt.type === 'status') {
+            updateThinking(evt.message);          // real step from the pipeline
+          } else if (evt.type === 'done') {
+            removeThinking();
+            if (evt.result && !evt.result.error) {
+              addBotBubble(evt.result);
+            } else {
+              addErrorBubble(evt.result?.error || 'No response received');
+            }
+          } else if (evt.type === 'error') {
+            removeThinking();
+            addErrorBubble(evt.message || 'Server error');
+          }
+          // 'heartbeat' — keep connection alive, no UI update needed
+        }
       }
     } catch (err) {
-      clearInterval(stepTimer);
       removeThinking();
       addErrorBubble('Network error — please try again.');
     } finally {
