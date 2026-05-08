@@ -927,39 +927,81 @@ qualitatively to legal safety by surfacing superseded regulations.
 
 \begin{enumerate}[leftmargin=*]
 
+\item \textbf{Parametric memory contamination.}
+A critical confound in any closed-domain RAG evaluation is \emph{parametric
+leakage}: if the Algerian Official Gazette corpus was included in the pre-training
+data of Gemini or Llama-3.3, the models may answer from memorised weights rather
+than the retrieved context, artificially inflating Faithfulness and Answer Relevance
+scores. We cannot exclude this possibility without white-box access to training data
+manifests, which Groq and Google do not disclose. We partially mitigate this by
+measuring \emph{Context Precision} and \emph{Context Recall} — metrics that
+directly assess whether the retrieved chunks drove the answer — but a fully
+controlled study using a held-out, never-published regulatory document set is
+necessary to rule out parametric leakage entirely.
+
+\item \textbf{Binary rather than partial supersession.}
+The Temporal Supersession Detector [I3] models supersession as a binary
+event: a newer document either overrides or does not override an older one.
+Algerian regulatory practice frequently involves \emph{partial} supersession,
+where a 2024 decree amends only Article 4 of a 2018 circular, leaving the
+remaining articles in full force. The current system cannot distinguish this
+from total replacement, risking a false alarm that discards still-valid provisions.
+Resolving this requires article-level segmentation and cross-document alignment,
+which demands a knowledge graph rather than chunk-level cosine similarity.
+
+\item \textbf{Unverified citation hallucination in MALD.}
+The Judge agent is instructed to output \texttt{[REF-N]} inline citations, but
+no deterministic, programmatic check verifies that the quoted text actually
+exists in Chunk~$N$. An LLM can hallucinate a plausible legal clause attributed
+to \texttt{[REF-3]} even when that chunk contains no such text. This is the most
+dangerous failure mode in legal AI, as it produces confident, cited, but factually
+fabricated answers. A post-generation citation verifier — checking each
+\texttt{[REF-N]} against the retrieved chunk using fuzzy string matching —
+is a necessary addition before production deployment.
+
+\item \textbf{Positional bias and agent sycophancy in MALD.}
+LLMs exhibit well-documented \emph{primacy bias}: content appearing first in a
+long prompt receives disproportionate attention~\cite{liu2023lost}. The Judge
+(Gemini) may systematically favour the Advocate's argument simply because it
+is placed first in the prompt, regardless of legal merit. Additionally, both
+Advocate and Devil's Advocate run on the same Groq Llama-3.3 model, risking
+\emph{sycophantic collusion}: the Devil's Advocate may produce superficial
+counter-arguments to avoid generating text that contradicts its twin agent's
+conclusion. Mitigations include prompt-order randomisation for the Judge and
+using a different model family (e.g., Mistral-7B) for the Devil's Advocate.
+
 \item \textbf{Human evaluation coverage.}
 Human annotation covers 50 answers (15\% of the 330-question benchmark), with
 Fleiss' $\kappa = 0.61$ inter-rater agreement (substantial). Full 330-question
 human annotation with formal Cohen's Kappa reporting is planned for the
-camera-ready version. Current coverage is sufficient for significance testing
-on the reported sub-sample results.
+camera-ready version. Critically, the system does not yet report a
+\emph{False Negative Refusal Rate} — the proportion of valid, answerable
+queries that the null-detection gate incorrectly refuses. This metric is as
+important as the True Positive Refusal Rate for assessing deployment safety.
 
-\item \textbf{Domain generalisability.}
-The current evaluation is limited to Algerian Higher Education regulations
-(2018--2024). Reviewers correctly note that architecture claims require
-out-of-domain validation. Section~\ref{sec:reviewer-response} (W7) reports
-a 20-query adversarial probe set; a full secondary-corpus evaluation on
-an open Arabic legal dataset is planned for v4.
+\item \textbf{API cost worst-case boundary.}
+The reported average cost of \$0.0042/query assumes a single retrieval iteration.
+If a complex query triggers the adaptive IQR re-retrieval loop three times, costs
+triple to $\approx$\$0.013. The \emph{worst-case cost boundary} across all query
+types and iteration counts is not reported, making economic planning for
+high-traffic deployments impossible without running the full pipeline on a
+cost-distribution study.
 
-\item \textbf{API cost at scale.}
-At \$0.0042/query, a system serving 10,000 queries/day costs $\approx$\$42/day in
-API fees. The SetFit authority classifier (W4) reduces authority-related LLM calls
-by $\approx$91\%, dropping per-query cost to an estimated \$0.0038.
-High-traffic deployments should further consider local model hosting
-(e.g., Llama-3.3 via vLLM, Gemma-3 for synthesis).
+\item \textbf{Cross-encoder token truncation.}
+The cross-encoder re-ranking step (W5) uses \texttt{mMiniLM-L6} with a strict
+512-token context limit. Algerian legal chunks frequently exceed this limit;
+the encoder silently truncates the tail of each chunk, potentially discarding
+critical legal exceptions or conditions that appear at the end of a regulatory
+paragraph. Long-document cross-encoders (e.g., \texttt{jina-reranker-v2-base-multilingual}
+with 8,192-token support) would eliminate this blind spot.
 
-\item \textbf{MALD latency.}
-The Advocate + Devil's Advocate calls add $\sim$400--600ms compared to single-pass
-synthesis (even in parallel). SSE streaming (W12, \texttt{/api/stream}) eliminates
-\emph{perceived} latency by surfacing live reasoning traces during inference.
-For throughput-sensitive deployments, MALD can be conditionally disabled for
-high-confidence queries (confidence $> 0.85$).
-
-\item \textbf{Corpus immutability assumption.}
-Dynamic ingestion (W10) supports incremental chunk-level updates via manifest
-checksums; however, re-embedding new chunks still requires Gemini API calls.
-A local embedding model (e.g., multilingual E5) would make incremental
-ingestion fully offline.
+\item \textbf{Effective date blindness.}
+The temporal weighting system uses document publication year as its proxy for
+recency. However, a decree published in 2023 may explicitly state it enters
+into force in 2025. The system currently treats the 2023 publication date as
+the effective date, potentially surfacing regulations that are not yet legally
+operative. Parsing effective-date fields from document headers would provide
+legally accurate temporal anchoring.
 
 \end{enumerate}
 
@@ -968,30 +1010,100 @@ ingestion fully offline.
 \label{sec:future}
 % ─────────────────────────────────────────────────────────────────────────────
 
+\noindent\textbf{Retrieval \& Embedding Improvements}
 \begin{enumerate}[leftmargin=*,nosep]
-\item \textbf{Learned intent weights [W1]:} replace the manually-tuned
-  $\Delta_4$ simplex weight vectors with Bayesian Optimisation or a lightweight
-  MLP trained on a 50-query labelled development set, providing scientific
-  grounding for the routing coefficients.
-\item \textbf{Full out-of-domain evaluation [W7]:} evaluate SPIRAL-RAG on a
-  secondary Arabic legal corpus (e.g., the Algerian Family Code or ALQAC dataset)
-  without code changes, to demonstrate architecture generalisability.
-\item \textbf{Strict exact-match metric for temporal queries [W8]:} for the
-  \emph{Temporal} and \emph{Comparative} benchmark subsets, annotate expected
-  decree numbers and years, and measure exact-match citation recall independently
-  of RAGAS.
-\item \textbf{Full 330-question human annotation [W9]:} complete the 5-expert
-  annotation with formal Cohen's Kappa reporting for all benchmark questions.
-\item \textbf{Knowledge graph for temporal linking:} link articles across years via
-  explicit supersession edges, enabling multi-hop temporal reasoning beyond the
-  pairwise detection of v3.1.
-\item \textbf{DarijaBERT language ID [W11]:} replace the heuristic Arabic-script
-  Darija lexicon with a fine-tuned DarijaBERT or n-gram Naive Bayes classifier
-  trained on Algerian social media text.
-\item \textbf{Conditional MALD:} skip MALD for queries with confidence $>0.85$
-  to reduce cost and latency on unambiguous, high-certainty questions.
-\item \textbf{External RAG baseline:} compare against LlamaIndex and LangChain
-  out-of-the-box pipelines to establish superiority over industry-standard frameworks.
+
+\item \textbf{Multi-hop knowledge graph retrieval.}
+Algerian law relies heavily on referential chains (e.g., \textit{``Decree X amends
+Article 4 of Law Y''}). The current system retrieves isolated chunks with no ability
+to traverse hierarchical citation graphs. Constructing a knowledge graph over the
+corpus — with explicit \textsc{amends}, \textsc{supersedes}, and \textsc{references}
+edges — would enable multi-hop legal reasoning that is impossible with flat vector
+retrieval.
+
+\item \textbf{Long-document cross-encoder re-ranking.}
+The \texttt{mMiniLM-L6} cross-encoder silently truncates chunks beyond 512 tokens,
+discarding legal exceptions that appear at the end of regulatory paragraphs.
+Replacing it with a long-context reranker (e.g., \texttt{jina-reranker-v2-base-multilingual},
+8,192-token limit) would eliminate this blind spot entirely.
+
+\item \textbf{Tuned RRF constant $k$.}
+The Reciprocal Rank Fusion constant $k=60$ is borrowed from general IR literature.
+A corpus-specific grid search over $k \in \{10, 20, 40, 60, 100\}$ on the 330-query
+benchmark would provide empirically grounded fusion weights for the Algerian legal
+score distribution.
+
+\item \textbf{Full out-of-domain evaluation.}
+Evaluate SPIRAL-RAG on a secondary Arabic legal corpus (Algerian Family Code or ALQAC
+dataset) without code changes, to demonstrate that the architecture generalises
+beyond the Ministry of Higher Education domain.
+
+\end{enumerate}
+
+\vspace{6pt}
+\noindent\textbf{MALD Robustness}
+\begin{enumerate}[leftmargin=*,nosep,resume]
+
+\item \textbf{Citation hallucination verifier.}
+Add a post-generation verification pass that checks each \texttt{[REF-N]} citation
+against the retrieved chunk text using fuzzy string matching (Levenshtein distance
+$\leq 0.15$). Any citation whose quoted text cannot be found in Chunk~$N$ is flagged
+and suppressed before delivery to the user.
+
+\item \textbf{Prompt-order randomisation and cross-family debate.}
+Mitigate primacy bias in the Judge by randomly swapping Advocate/Devil's Advocate
+order at inference time. Use a different model family (e.g., Mistral-7B via Groq)
+for the Devil's Advocate to prevent sycophantic collusion between agents from the
+same model.
+
+\item \textbf{RLHF / DPO alignment of the Judge agent.}
+Replace the generalist Gemini Judge with a local Llama-3-8B model fine-tuned via
+\emph{Reinforcement Learning from Human Feedback} (RLHF) or \emph{Direct Preference
+Optimisation} (DPO)~\cite{rafailov2023dpo}. Legal domain experts compare pairs of
+Judge outputs and label preferences; the model is aligned to produce answers that
+prioritise citation accuracy, appropriate caution, and Algerian administrative
+reasoning style — properties that a generalist cloud model cannot be trusted to
+exhibit by default.
+
+\end{enumerate}
+
+\vspace{6pt}
+\noindent\textbf{Temporal \& Legal Precision}
+\begin{enumerate}[leftmargin=*,nosep,resume]
+
+\item \textbf{Partial supersession detection.}
+Extend the Temporal Supersession Detector to distinguish \emph{partial} from
+\emph{total} supersession. A 2024 decree may amend only Article 4 of a 2018
+circular, leaving all other articles operative. Article-level segmentation plus
+cross-document alignment would surface the precise scope of each supersession,
+avoiding false discards of still-valid provisions.
+
+\item \textbf{Effective date parsing.}
+Parse explicit in-force date fields from document headers (e.g.,
+\textit{``entre en vigueur le 1er janvier 2025''}) to replace publication-year
+temporal weighting with legally accurate effective-date anchoring.
+
+\end{enumerate}
+
+\vspace{6pt}
+\noindent\textbf{Reinforcement Learning (Strategic Direction)}
+\begin{enumerate}[leftmargin=*,nosep,resume]
+
+\item \textbf{RL for dynamic intent-weight adaptation.}
+Replace the static per-intent weight table (Table~\ref{tab:intent_weights}) with
+a Reinforcement Learning agent trained on user feedback signals (thumbs up/down on
+retrieved context quality). The RL agent learns to adjust $\mathbf{w}^\phi$ per
+query in real time, transcending the limitations of any fixed weight simplex and
+providing a principled, data-driven routing mechanism that improves continuously
+with deployment usage.
+
+\item \textbf{Strict exact-match metric, full human annotation, and external baseline.}
+For the \emph{Temporal} and \emph{Comparative} subsets, report exact-match citation
+recall on annotated decree numbers independently of RAGAS. Complete the full
+330-question human annotation with Cohen's Kappa. Compare against LlamaIndex and
+LangChain out-of-the-box pipelines to establish superiority over industry-standard
+frameworks.
+
 \end{enumerate}
 
 % ─────────────────────────────────────────────────────────────────────────────
@@ -1136,6 +1248,14 @@ X.~Yue et al., ``MMMU-Pro: A More Robust Multi-discipline Multimodal Understandi
 \bibitem{shi2024scaling}
 W.~Shi et al., ``Scaling Retrieval-Based Language Models with a Trillion-Token Datastore,''
 \textit{arXiv:2407.12854}, 2024.
+
+\bibitem{rafailov2023dpo}
+R.~Rafailov et al., ``Direct Preference Optimization: Your Language Model is Secretly a Reward Model,''
+\textit{NeurIPS}, vol.~36, 2023.
+
+\bibitem{liu2023lost}
+N.~F.~Liu et al., ``Lost in the Middle: How Language Models Use Long Contexts,''
+\textit{TACL}, vol.~12, pp.~157--173, 2024.
 
 \end{thebibliography}
 
