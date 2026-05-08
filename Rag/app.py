@@ -126,14 +126,16 @@ def stats():
         "total_chunks": len(chunks),
         "by_year": year_counts,
         "architecture": "SPIRAL-RAG",
-        "retrieval": "BM25 + TF-IDF Semantic via RRF",
         "llms": {
             "reasoning": "Groq llama-3.3-70b-versatile",
-            "synthesis": "Google Gemini 1.5 Flash"
+            "synthesis": "Google Gemini 2.0 Flash",
+            "embedding": "Gemini Embedding-001 (dense, 768-dim)"
         },
         "languages_supported": list(LANG_LABELS.values()),
         "max_iterations": SpiralRAG.MAX_ITERATIONS,
-        "confidence_threshold": SpiralRAG.CONFIDENCE_THRESHOLD
+        "confidence_threshold": "adaptive (IQR-based, per query)",
+        "retrieval": "BM25 + Gemini Dense Embeddings via RRF",
+        "version": "v2"
     })
 
 
