@@ -1,8 +1,0 @@
-uploads = []
-generated = []
-
-[[outputs]]
-id = "BJA-BV61s6A9A2Q6unjiR"
-uri = "file://SPIRAL_RAG_Paper.zip"
-type = "unspecified"
-title = "SPIRAL-RAG — Full LaTeX Research Paper"

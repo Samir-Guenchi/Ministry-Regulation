@@ -53,3 +53,20 @@ Thumbs.db
 *.aux
 *.out
 *.toc
+*.log
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# Jupyter Notebooks
+*.ipynb_checkpoints/
+
+# Embedding cache
+.embed_cache/
+
+# Replit
+.replit
+.agents/
+
+# Temporary files
+attached_assets/

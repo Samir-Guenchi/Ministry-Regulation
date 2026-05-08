@@ -1,46 +1,29 @@
-# Ministry Regulation - Adaptive Legal RAG System
+# SPIRAL-RAG: Ministry Regulation Q&A System
 
-**The World's Most Advanced Legal Document AI System**
+**Self-reflective Parallel Iterative Retrieval with Adaptive Language**
 
-[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/Samir-Guenchi/Ministry-Regulation)
+[![Version](https://img.shields.io/badge/version-2.0-blue.svg)](https://github.com/Samir-Guenchi/Ministry-Regulation)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 
 ---
 
-##  Overview
+## 📋 Overview
 
-An intelligent Arabic Q&A system using **Adaptive Retrieval-Augmented Generation (RAG)** with **10 world-first innovations** for legal document analysis. Powered by Groq API (llama-3.3-70b-versatile) with AGI-level reasoning capabilities.
+An advanced multilingual RAG system for Algerian Ministry of Higher Education regulations. SPIRAL-RAG combines dense retrieval, legal authority scoring, and adaptive reasoning to provide accurate, cited answers in Arabic, French, English, and Algerian Darija.
 
 ### **Key Features**
 
-**Phase 1: Enhanced RAG**  
-✅ **Temporal Reasoning** - Understands time-based queries and law versions  
-✅ **Contradiction Detection** - Identifies and resolves conflicting information  
-✅ **Hierarchical Chunking** - Preserves legal document structure  
-
-**Phase 2: Adaptive Reasoning**  
-✅ **Causal Reasoning** - Builds cause-effect chains like a lawyer  
-✅ **Counterfactual Analysis** - Analyzes "what if" scenarios  
-✅ **Implicit Requirements** - Discovers unstated rules  
-✅ **Situational Adaptation** - Personalizes advice per user  
-
-**Phase 3: Advanced Features**  
-✅ **Multi-hop Reasoning** - Handles complex multi-step questions  
-✅ **Query Expansion** - Expands queries with synonyms and related terms  
-✅ **Cross-encoder Re-ranking** - Ensures most relevant results first  
-
-### **Performance**
-
-- **Accuracy**: 98% (vs 60% standard RAG) - **+170% improvement**
-- **Response Time**: <2s (uncached), <100ms (cached)
-- **Languages**: Arabic, English, French, Darija
-- **Documents**: 10,000+ legal documents indexed
-- **Innovations**: 10 world-first features
+✅ **Dense Retrieval** - Gemini text-embedding-004 (768-dim multilingual embeddings)  
+✅ **Legal Authority Scoring** - Prioritizes Official Gazette, Decrees, and Circulars  
+✅ **Adaptive Confidence Threshold** - Score-distribution driven (not hardcoded)  
+✅ **Parallel Processing** - Concurrent LLM calls reduce latency  
+✅ **Multilingual Support** - Arabic, French, English, Darija  
+✅ **Self-Reflective Retrieval** - Iterative refinement with relevance scoring  
 
 ---
 
-##  Quick Start
+## 🚀 Quick Start
 
 ### **1. Installation**
 
@@ -61,277 +44,276 @@ cp .env.example .env
 
 Edit `.env` file:
 ```bash
-# Required
+# Required API Keys
 GROQ_API_KEY=your_groq_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here  # For embeddings
+GEMINI_API_KEY=your_gemini_api_key_here
 
-# Optional
+# Data Configuration
 DATA_DIRECTORY=./data
+
+# Optional Settings
 CACHE_DIRECTORY=./cache
+LOG_LEVEL=INFO
 ```
 
 ### **3. Start System**
 
 ```bash
-# Start API server
-python start_system.py
+# Navigate to Rag directory
+cd Rag
 
-# API available at: http://localhost:8000
-# Documentation: http://localhost:8000/docs
+# Start Flask server
+python app.py
+
+# API available at: http://localhost:5000
 ```
 
 ### **4. Query Example**
 
 ```bash
-curl -X POST "http://localhost:8000/query" \
+curl -X POST "http://localhost:5000/api/ask" \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "أنا طبيب لدي 3 سنوات خبرة، هل يمكنني التقديم؟"
+    "question": "ما هي شروط التسجيل في الدكتوراه؟",
+    "language": "ar"
   }'
 ```
 
 ---
 
-##  Project Structure
+## 📁 Project Structure
 
 ```
 Ministry-Regulation/
-├── graphrag/                      # Core system modules
-│   ├── api.py                    # FastAPI endpoints
-│   ├── workflow.py               # LangGraph workflow
-│   ├── retriever.py              # Hybrid retrieval
-│   ├── config.py                 # Configuration
-│   ├── models.py                 # Pydantic models
-│   │
-│   ├── temporal_reasoner.py     # 🔥 Temporal reasoning
-│   ├── contradiction_detector.py # 🔥 Contradiction detection
-│   ├── hierarchical_chunker.py  # 🔥 Hierarchical chunking
-│   ├── causal_reasoning_engine.py # 🔥 Causal reasoning
-│   ├── counterfactual_analyzer.py # 🔥 Counterfactual analysis
-│   ├── implicit_requirement_extractor.py # 🔥 Implicit requirements
-│   ├── situational_adapter.py   # 🔥 Situational adaptation
-│   ├── multi_hop_reasoner.py    # 🔥 Multi-hop reasoning
-│   ├── query_expander.py        # 🔥 Query expansion
-│   ├── cross_encoder_reranker.py # 🔥 Cross-encoder re-ranking
-│   ├── counterfactual_analyzer.py #  Counterfactual analysis
-│   ├── implicit_requirement_extractor.py #  Implicit requirements
-│   ├── situational_adapter.py   #  Situational adaptation
-│   │
-│   ├── cache_manager.py         # Semantic caching
-│   ├── graph_builder.py         # Knowledge graph
-│   ├── language_detector.py     # Multilingual support
-│   ├── guardrails.py            # Safety filters
-│   ├── monitoring.py            # Performance tracking
-│   └── rag_evaluator.py         # Evaluation metrics
-│
-├── scripts/                      # Utility scripts
-│   ├── build_vector_store.py   # Build FAISS index
-│   └── build_graph.py           # Build Neo4j graph
-│
-├── tests/                        # Test suite
-│   ├── test_system.py           # System tests
-│   ├── test_enhanced_rag.py     # Enhanced features tests
-│   └── test_adaptive_reasoning.py # Adaptive reasoning tests
+├── Rag/                          # SPIRAL-RAG application
+│   ├── app.py                   # Flask API server
+│   ├── rag_core.py              # Core SPIRAL-RAG engine
+│   ├── index.html               # Landing page
+│   ├── chat.html                # Chat interface
+│   ├── ai.jpg                   # UI assets
+│   └── logo.png
 │
 ├── data/                         # Legal documents (JSON)
 │   ├── 2018/
 │   ├── 2019/
-│   └── ...
+│   ├── 2020/
+│   ├── 2021/
+│   ├── 2022/
+│   ├── 2023/
+│   └── 2024/
+│
+├── evaluation/                   # Evaluation framework
+│   ├── generate_benchmark.py   # Benchmark generator
+│   └── benchmark.csv            # 300+ evaluation questions
 │
 ├── docs/                         # Documentation
 │   ├── API.md                   # API reference
 │   ├── ARCHITECTURE.md          # System architecture
 │   ├── DEPLOYMENT.md            # Deployment guide
 │   ├── EVALUATION_GUIDE.md      # Evaluation metrics
-│   ├── ENHANCED_RAG_INNOVATIONS.md # Phase 1 innovations
-│   ├── ADAPTIVE_REASONING_COMPLETE.md # Phase 2 innovations
-│   ├── IMPLEMENTATION_SUMMARY.md # Complete summary
 │   ├── QUICK_START_ENHANCED.md  # Quick reference
-│   └── FINAL_INNOVATION_SUMMARY.md # All innovations
+│   ├── RAG_SYSTEM_LATEX.pdf     # Research paper (PDF)
+│   ├── RAG_SYSTEM_LATEX.tex     # Research paper (LaTeX)
+│   └── RAG_SYSTEM_PRESENTATION.tex # Presentation slides
 │
-├── start_system.py              # System startup
-├── run_evaluation.py            # Run evaluations
-├── requirements.txt             # Dependencies
+├── SPIRAL_RAG_Research_Paper.tex # Main research paper
+├── SPIRAL_RAG_Paper.zip         # Paper archive
+├── requirements.txt             # Python dependencies
 ├── docker-compose.yml           # Docker setup
 ├── Dockerfile                   # Docker image
 ├── .env.example                 # Environment template
+├── .gitignore                   # Git ignore rules
 └── README.md                    # This file
 ```
 
 ---
 
-## 🎯 Core Innovations
+## 🎯 System Architecture
 
-### **Phase 1: Enhanced RAG**
+### **SPIRAL-RAG Pipeline**
 
-#### **1. Temporal Reasoning** 
-```python
-Query: "ما هي شروط التوظيف في 2019؟"
-System: Filters to laws active in 2019
-        Provides historically accurate answer
+```
+User Query
+    ↓
+1. Language Detection (Arabic/French/English/Darija)
+    ↓
+2. Query Expansion (Groq - 3 variants)
+    ↓
+3. Hybrid Retrieval (Parallel)
+    ├─→ BM25 (lexical)
+    └─→ Dense Embeddings (Gemini)
+    ↓
+4. Reciprocal Rank Fusion (RRF)
+    ↓
+5. Self-Reflective Scoring (Groq)
+    ├─→ Relevance judgment
+    ├─→ Adaptive threshold
+    └─→ Iterate if needed (max 3)
+    ↓
+6. Legal Authority Ranking
+    ├─→ Official Gazette (1.0)
+    ├─→ Decree (0.75)
+    └─→ Circular (0.50)
+    ↓
+7. Synthesis (Gemini 2.0 Flash)
+    ↓
+8. Validation (Groq consistency check)
+    ↓
+Final Answer with Citations
 ```
 
-#### **2. Contradiction Detection** 
-```python
-Doc 1 (2018): "3 years required"
-Doc 2 (2020): "5 years required"
-System: Detects conflict
-        Resolves: "Newer law (2020) supersedes: 5 years"
-```
+### **Key Innovations**
 
-#### **3. Hierarchical Chunking** 
-```python
-Traditional: "يشترط في المترشح..."
-Hierarchical: Law 12.20 > Chapter 2 > Article 5 > Paragraph 1
-             Precise citation with full context
-```
+#### **[R1] Dense Retrieval**
+- **Replaces**: Sparse TF-IDF
+- **Uses**: Gemini text-embedding-004 (768-dim)
+- **Benefits**: Handles Arabic morphology, paraphrasing, cross-lingual queries
+- **Caching**: Disk-based for O(1) warm-start
 
-### **Phase 2: Adaptive Reasoning**
+#### **[R2] Legal Authority Scoring**
+- **Replaces**: Multi-year triangulation (legally flawed)
+- **Hierarchy**: Official Gazette > Decree > Circular
+- **Principle**: Single authoritative source is valid
 
-#### **4. Causal Reasoning** 
-```python
-Extracts: "5 years experience → eligible → can apply"
-Builds: Multi-step logical chains
-Analyzes: Dependencies and prerequisites
-```
+#### **[R3] Adaptive Confidence Threshold**
+- **Replaces**: Fixed 0.65 threshold
+- **Formula**: `median + 0.5 * IQR` of relevance scores
+- **Range**: [0.45, 0.80]
 
-#### **5. Counterfactual Analysis** 
-```python
-User: "I have 3 years, can I apply?"
-System: Gap: 2 years missing
-        Alternatives:
-        1. Wait 2 years (70% feasibility)
-        2. Check training programs (60%)
-        3. Look for junior positions (80%)
-```
-
-#### **6. Implicit Requirements** 
-```python
-Explicit: "شهادة جامعية مطلوبة"
-System discovers implicit:
-  • نسخة مصادق عليها
-  • كشف النقاط
-  • معادلة الشهادة (للأجانب)
-```
-
-#### **7. Situational Adaptation** 
-```python
-User: "أنا طبيب لدي 3 سنوات"
-System: Identifies: Medical professional
-        Finds: Special medical laws
-        Result: "You're eligible under medical law!"
-```
+#### **[R4] Parallel Processing**
+- **ThreadPoolExecutor** for concurrent API calls
+- **Reduces**: Tail latency under load
+- **Parallelizes**: Query expansion, retrieval, scoring
 
 ---
 
-## Performance Metrics
+## 🔧 API Reference
 
-| Metric | Standard RAG | Our System | Improvement |
-|--------|-------------|------------|-------------|
-| **Accuracy** | ~60% | ~95% | **+58%** |
-| **Temporal Queries** | ❌ Fails | ✅ Accurate | **+100%** |
-| **Conflict Handling** | ❌ Wrong | ✅ Resolved | **+100%** |
-| **Personalization** | ❌ Generic | ✅ Tailored | **+100%** |
-| **Response Time** | 1-2s | 1.5-2.5s | -0.5s |
-| **Cache Hit Rate** | N/A | 40-60% | **New** |
+### **POST /api/ask**
 
----
+Query the SPIRAL-RAG system.
 
-## 🔧 API Usage
-
-### **Basic Query**
-
-```python
-import requests
-
-response = requests.post(
-    "http://localhost:8000/query",
-    json={"question": "ما هي شروط التوظيف؟"}
-)
-
-result = response.json()
-print(result["answer"])
-```
-
-### **Advanced Query with Options**
-
-```python
-response = requests.post(
-    "http://localhost:8000/query",
-    json={
-        "question": "أنا طبيب لدي 3 سنوات خبرة",
-        "include_graph": True,
-        "max_results": 5
-    }
-)
-
-result = response.json()
-print(f"Answer: {result['answer']}")
-print(f"Temporal: {result.get('temporal_explanation', '')}")
-print(f"Contradictions: {result.get('contradiction_warning', '')}")
-print(f"Citations: {len(result['citations'])}")
-```
-
-### **Response Format**
-
+**Request:**
 ```json
 {
-  "answer": "Complete personalized answer...",
-  "detected_language": "ar",
-  "response_language": "ar",
+  "question": "ما هي شروط التسجيل في الدكتوراه؟",
+  "language": "ar"  // optional: ar, fr, en, dz
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "Complete answer with inline citations [REF-1]...",
+  "language": "ar",
+  "language_name": "Arabic",
+  "confidence": 0.85,
   "citations": [
     {
-      "law_name": "القانون 12.20",
-      "article_number": "5",
-      "year": "2020",
-      "confidence": 0.95
+      "ref": "REF-1",
+      "year": "2023",
+      "title": "منشور رقم 123",
+      "file": "2023_1.json",
+      "authority_tier": 2,
+      "authority_label": "Ministerial Decree",
+      "relevance": 0.92,
+      "dense_score": 0.847
     }
   ],
-  "temporal_explanation": " Laws active in 2019...",
-  "contradiction_warning": "Conflict detected...",
-  "cached": false,
-  "processing_time_ms": 1250.5,
-  "retrieval_method": "hybrid_enhanced"
+  "evidence_count": 12,
+  "iterations": 2,
+  "reflection_log": [
+    "Language detected: Arabic",
+    "Query expanded to 4 variants",
+    "Iter 1: +15 chunks | conf=0.68 | adaptive_thresh=0.65",
+    "Iter 2: +8 chunks | conf=0.85 | adaptive_thresh=0.72",
+    "Adaptive threshold met — stopping at iteration 2"
+  ],
+  "processing_time_ms": 2847.3
+}
+```
+
+### **GET /api/stats**
+
+Get system statistics.
+
+**Response:**
+```json
+{
+  "total_chunks": 3247,
+  "by_year": {
+    "2018": 412,
+    "2019": 389,
+    "2020": 456,
+    "2021": 501,
+    "2022": 487,
+    "2023": 523,
+    "2024": 479
+  },
+  "architecture": "SPIRAL-RAG",
+  "llms": {
+    "reasoning": "Groq llama-3.3-70b-versatile",
+    "synthesis": "Google Gemini 2.0 Flash",
+    "embedding": "Gemini Embedding-001 (dense, 768-dim)"
+  },
+  "languages_supported": ["Arabic", "French", "English", "Algerian Darija"],
+  "max_iterations": 3,
+  "confidence_threshold": "adaptive (IQR-based, per query)",
+  "retrieval": "BM25 + Gemini Dense Embeddings via RRF",
+  "version": "v2"
+}
+```
+
+### **GET /api/health**
+
+Health check endpoint.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "groq_configured": true,
+  "gemini_configured": true,
+  "corpus_loaded": true,
+  "chunk_count": 3247
 }
 ```
 
 ---
 
-##  Testing
+## 📊 Evaluation
 
-### **Run All Tests**
+### **Benchmark Dataset**
+
+The system includes a comprehensive evaluation framework:
+
+- **300+ questions** across 6 types:
+  - Factual (~80)
+  - Temporal (~63)
+  - Comparative (~42)
+  - Procedural (~45)
+  - Eligibility (~30)
+  - Darija (~50)
+
+- **4 languages**: Arabic, French, English, Darija
+
+### **Generate Benchmark**
 
 ```bash
-# System tests
-python -m pytest tests/
-
-# Enhanced RAG tests
-python test_enhanced_rag.py
-
-# Adaptive reasoning tests
-python test_adaptive_reasoning.py
+cd evaluation
+python generate_benchmark.py --output benchmark.csv
 ```
 
-### **Run Evaluation**
+### **Evaluation Metrics**
 
-```bash
-python run_evaluation.py
-```
+- **Faithfulness**: Answer grounded in retrieved evidence
+- **Answer Relevance**: Directly addresses the question
+- **Context Precision**: Relevant chunks ranked highly
+- **Context Recall**: All relevant information retrieved
 
 ---
 
-##  Documentation
-
-- **[API Reference](docs/API.md)** - Complete API documentation
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and components
-- **[Deployment](docs/DEPLOYMENT.md)** - Production deployment guide
-- **[Evaluation](docs/EVALUATION_GUIDE.md)** - Metrics and evaluation
-- **[Innovations](docs/FINAL_INNOVATION_SUMMARY.md)** - All 7 innovations explained
-- **[Quick Start](docs/QUICK_START_ENHANCED.md)** - Quick reference guide
-
----
-
-##  Docker Deployment
+## 🐳 Docker Deployment
 
 ```bash
 # Build and start
@@ -341,7 +323,7 @@ docker-compose up -d
 docker-compose ps
 
 # View logs
-docker-compose logs -f
+docker-compose logs -f rag-api
 
 # Stop
 docker-compose down
@@ -349,52 +331,48 @@ docker-compose down
 
 ---
 
-##  Security & Compliance
+## 🔒 Security & Safety
 
-- ✅ API key management via environment variables
-- ✅ Input validation with Pydantic
-- ✅ Political content filtering
-- ✅ Out-of-scope query blocking
-- ✅ Citation requirements (prevents hallucination)
-- ✅ Audit logging for all queries
-
----
-
-##  Multilingual Support
-
-| Language | Query | Response | Status |
-|----------|-------|----------|--------|
-| **Arabic** | ✅ | ✅ | Full support |
-| **English** | ✅ | ✅ | Full support |
-| **French** | ✅ | ✅ | Full support |
-| **Darija** | ✅ | Standard Arabic | Automatic conversion |
+- ✅ **API Key Management** - Environment variables only
+- ✅ **Input Validation** - Length limits, sanitization
+- ✅ **Political Content Filtering** - Blocks sensitive topics
+- ✅ **Violent Content Detection** - Safety guardrails
+- ✅ **Citation Requirements** - Prevents hallucination
+- ✅ **Consistency Validation** - Groq-based fact checking
 
 ---
 
-##  Roadmap
+## 🌍 Multilingual Support
 
-### **Completed** 
-- [x] Basic RAG system
-- [x] Groq API integration
-- [x] Temporal reasoning
-- [x] Contradiction detection
-- [x] Hierarchical chunking
-- [x] Causal reasoning
-- [x] Counterfactual analysis
-- [x] Implicit requirements
-- [x] Situational adaptation
+| Language | Detection | Query | Response | Status |
+|----------|-----------|-------|----------|--------|
+| **Arabic** | ✅ | ✅ | ✅ | Full support |
+| **French** | ✅ | ✅ | ✅ | Full support |
+| **English** | ✅ | ✅ | ✅ | Full support |
+| **Darija** | ✅ | ✅ | ✅ | Full support |
 
-### **In Progress** 
-- [ ] Multi-hop reasoning
-- [ ] Query expansion
-- [ ] Cross-encoder re-ranking
-- [ ] Active learning
+---
 
-### **Planned** 📋
-- [ ] Mobile app
-- [ ] Voice interface
-- [ ] Real-time updates
-- [ ] Multi-tenant support
+## 📈 Performance
+
+| Metric | Value |
+|--------|-------|
+| **Average Latency** | 2.8s |
+| **Cache Hit Rate** | 40-60% |
+| **Embedding Dimension** | 768 |
+| **Max Iterations** | 3 |
+| **Top-K Results** | 8 |
+| **Corpus Size** | 3,000+ chunks |
+
+---
+
+## 📚 Documentation
+
+- **[API Reference](docs/API.md)** - Complete API documentation
+- **[Architecture](docs/ARCHITECTURE.md)** - System design
+- **[Deployment](docs/DEPLOYMENT.md)** - Production deployment
+- **[Evaluation](docs/EVALUATION_GUIDE.md)** - Metrics and benchmarks
+- **[Quick Start](docs/QUICK_START_ENHANCED.md)** - Quick reference
 
 ---
 
@@ -415,43 +393,23 @@ MIT License - see [LICENSE](LICENSE) file
 
 ---
 
-##  Acknowledgments
+## 🙏 Acknowledgments
 
-- **Groq** - Fast LLM inference
-- **OpenAI** - Embeddings
-- **LangChain** - RAG framework
-- **LangGraph** - Workflow orchestration
-- **FAISS** - Vector search
-- **Neo4j** - Knowledge graph
+- **Groq** - Fast LLM inference (llama-3.3-70b-versatile)
+- **Google Gemini** - Embeddings and synthesis
+- **LangDetect** - Language detection
+- **NumPy** - Vector operations
+- **Flask** - Web framework
 
 ---
 
-##  Support
+## 📧 Support
 
 - **Issues**: [GitHub Issues](https://github.com/Samir-Guenchi/Ministry-Regulation/issues)
 - **Email**: samir.guenchi@ensia.edu.dz
-- **Documentation**: [Wiki](https://github.com/Samir-Guenchi/Ministry-Regulation/wiki)
 
 ---
 
-##  Recognition
+**Built for the Algerian Ministry of Higher Education**
 
-**This system features 7 world-first innovations in RAG technology:**
-
-1. ✅ Temporal reasoning for legal documents
-2. ✅ Contradiction detection and resolution
-3. ✅ Hierarchical document chunking
-4. ✅ Causal reasoning chains
-5. ✅ Counterfactual scenario analysis
-6. ✅ Implicit requirement discovery
-7. ✅ Situational adaptation
-
-**Accuracy**: 95% (vs 60% standard RAG)  
-**Innovation Level**: AGI-level legal reasoning  
-**Status**: Production-ready  
-
----
-
-**Built with  for the legal community**
-
-**Version 4.0.0** | **February 2026**
+**Version 2.0** | **May 2026**
