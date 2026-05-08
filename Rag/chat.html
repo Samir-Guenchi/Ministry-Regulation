@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPIRAL-RAG — Legal Assistant</title>
+  <title>SPIRAL-RAG v3 — Legal Assistant</title>
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
     :root {
@@ -19,6 +19,9 @@
       --bubble-bot: #ffffff;
       --radius: 18px;
       --shadow: 0 2px 12px rgba(0,0,0,.08);
+      --warn: #f39c12;
+      --danger: #e74c3c;
+      --success: #27ae60;
     }
 
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -43,57 +46,42 @@
       box-shadow: var(--shadow);
       flex-shrink: 0;
     }
-
     .header-left { display: flex; align-items: center; gap: 12px; }
     .logo-wrap img { width: 42px; height: 42px; border-radius: 10px; }
     .header-title { font-size: 1rem; font-weight: 700; }
     .header-sub { font-size: .75rem; opacity: .8; margin-top: 2px; }
+    .header-badge {
+      font-size: .62rem; background: rgba(255,255,255,.22);
+      border: 1px solid rgba(255,255,255,.4);
+      padding: 2px 7px; border-radius: 10px; margin-top: 3px; display: inline-block;
+    }
 
     /* Language selector */
-    .lang-selector {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
+    .lang-selector { display: flex; gap: 6px; flex-wrap: wrap; }
     .lang-btn {
-      padding: 5px 12px;
-      border-radius: 20px;
+      padding: 5px 12px; border-radius: 20px;
       border: 1px solid rgba(255,255,255,.4);
-      background: rgba(255,255,255,.15);
-      color: #fff;
-      font-size: .75rem;
-      cursor: pointer;
-      transition: all .2s;
-      font-family: inherit;
+      background: rgba(255,255,255,.15); color: #fff;
+      font-size: .75rem; cursor: pointer; transition: all .2s; font-family: inherit;
     }
     .lang-btn:hover, .lang-btn.active {
-      background: rgba(255,255,255,.35);
-      border-color: rgba(255,255,255,.8);
+      background: rgba(255,255,255,.35); border-color: rgba(255,255,255,.8);
     }
 
     /* ─── Chat Area ─── */
     #chat-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      scroll-behavior: smooth;
+      flex: 1; overflow-y: auto; padding: 20px 16px;
+      display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth;
     }
 
     .message-wrap {
-      display: flex;
-      align-items: flex-end;
-      gap: 8px;
-      max-width: 82%;
+      display: flex; align-items: flex-end; gap: 8px; max-width: 84%;
     }
     .message-wrap.user { align-self: flex-start; flex-direction: row-reverse; }
     .message-wrap.bot  { align-self: flex-end; }
 
     .avatar {
-      width: 34px; height: 34px;
-      border-radius: 50%;
+      width: 34px; height: 34px; border-radius: 50%;
       background: linear-gradient(135deg, var(--primary), var(--secondary));
       display: flex; align-items: center; justify-content: center;
       font-size: 1rem; flex-shrink: 0;
@@ -101,141 +89,157 @@
     .avatar.user-av { background: var(--accent); color: #333; }
 
     .bubble {
-      padding: 12px 16px;
-      border-radius: var(--radius);
-      line-height: 1.7;
-      font-size: .92rem;
-      box-shadow: var(--shadow);
-      white-space: pre-wrap;
+      padding: 12px 16px; border-radius: var(--radius);
+      line-height: 1.7; font-size: .92rem;
+      box-shadow: var(--shadow); white-space: pre-wrap;
     }
     .bubble.user {
-      background: var(--bubble-user);
-      color: #fff;
+      background: var(--bubble-user); color: #fff;
       border-bottom-right-radius: 4px;
     }
     .bubble.bot {
-      background: var(--bubble-bot);
-      color: var(--text);
-      border-bottom-left-radius: 4px;
-      border: 1px solid var(--border);
+      background: var(--bubble-bot); color: var(--text);
+      border-bottom-left-radius: 4px; border: 1px solid var(--border);
     }
 
-    /* Metadata ribbon */
-    .meta-ribbon {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
-    }
+    /* ─── Meta ribbon ─── */
+    .meta-ribbon { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
     .meta-tag {
-      font-size: .68rem;
-      padding: 3px 9px;
-      border-radius: 20px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--muted);
+      font-size: .68rem; padding: 3px 9px; border-radius: 20px;
+      background: var(--bg); border: 1px solid var(--border); color: var(--muted);
     }
     .meta-tag.confidence-high { border-color: #00a896; color: #00836e; background: #e6f7f5; }
     .meta-tag.confidence-med  { border-color: #f9c80e; color: #9a7b00; background: #fef9e5; }
     .meta-tag.confidence-low  { border-color: #e74c3c; color: #c0392b; background: #fdecea; }
+    .meta-tag.intent          { border-color: #8e44ad; color: #6c3483; background: #f5eef8; }
+    .meta-tag.cost            { border-color: #1a5276; color: #1a5276; background: #eaf1fb; }
 
-    /* Citations */
-    .citations-block {
-      margin-top: 10px;
-      border-top: 1px solid var(--border);
-      padding-top: 8px;
-    }
+    /* ─── Citations ─── */
+    .citations-block { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
     .citations-title { font-size: .72rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
     .citation-item {
       display: flex; align-items: center; gap: 6px;
-      font-size: .7rem; color: var(--muted);
-      margin-bottom: 3px;
+      font-size: .7rem; color: var(--muted); margin-bottom: 3px;
     }
     .citation-badge {
       background: var(--primary); color: #fff;
       border-radius: 4px; padding: 1px 6px; font-size: .65rem; font-weight: 600;
     }
+    .citation-badge.tier-1 { background: #1a5276; }
+    .citation-badge.tier-2 { background: #1e8449; }
+    .citation-badge.tier-3 { background: #7d6608; }
+    .cite-method {
+      font-size: .6rem; padding: 1px 5px; border-radius: 8px;
+      background: #f0f4f8; border: 1px solid #cdd; color: var(--muted);
+    }
 
-    /* Thinking indicator */
+    /* ─── Collapsible panels ─── */
+    .panel-toggle {
+      font-size: .7rem; color: var(--secondary); cursor: pointer;
+      margin-top: 6px; display: inline-flex; align-items: center; gap: 4px;
+      user-select: none; padding: 3px 0;
+    }
+    .panel-toggle:hover { opacity: .8; }
+    .panel-body {
+      display: none; border-radius: 8px; margin-top: 5px;
+      padding: 10px 12px; font-size: .7rem; color: var(--muted);
+    }
+    .panel-body.reflection-log { background: #f8fbfc; border: 1px solid #cde8e4; }
+    .panel-body li { margin-bottom: 3px; }
+
+    /* ─── [I3] Supersession Alerts ─── */
+    .supersession-block {
+      margin-top: 8px; border-radius: 10px; overflow: hidden;
+      border: 1px solid #f0b27a;
+    }
+    .supersession-header {
+      background: #fef5ec; padding: 7px 12px;
+      font-size: .72rem; font-weight: 600; color: #a04000;
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+    }
+    .supersession-header:hover { background: #fdebd0; }
+    .supersession-body { display: none; padding: 10px 12px; background: #fffaf5; }
+    .supersession-item {
+      border-bottom: 1px dashed #f0b27a; padding-bottom: 7px; margin-bottom: 7px;
+      font-size: .7rem;
+    }
+    .supersession-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .sup-confirmed { color: var(--danger); font-weight: 600; }
+    .sup-candidate { color: var(--warn); }
+    .sup-doc { font-weight: 500; color: var(--text); }
+
+    /* ─── [I4] Debate Summary ─── */
+    .debate-block {
+      margin-top: 8px; border-radius: 10px; overflow: hidden;
+      border: 1px solid #a9cce3;
+    }
+    .debate-header {
+      background: #eaf4fb; padding: 7px 12px;
+      font-size: .72rem; font-weight: 600; color: #1a5276;
+      display: flex; align-items: center; gap: 6px; cursor: pointer;
+    }
+    .debate-header:hover { background: #d6eaf8; }
+    .debate-body { display: none; padding: 10px 12px; background: #f8fcfe; }
+    .debate-agent {
+      margin-bottom: 10px; padding: 8px 10px; border-radius: 8px;
+      font-size: .69rem; line-height: 1.5; color: var(--text);
+    }
+    .debate-agent.advocate    { background: #eafaf1; border-left: 3px solid var(--success); }
+    .debate-agent.devil       { background: #fef9e7; border-left: 3px solid var(--warn); }
+    .debate-agent-label {
+      font-weight: 700; font-size: .68rem; margin-bottom: 4px; display: block;
+    }
+    .debate-conflict-note {
+      font-size: .69rem; padding: 5px 10px; border-radius: 6px;
+      margin-top: 6px; font-weight: 500;
+    }
+    .debate-conflict-note.conflict   { background: #fdecea; color: var(--danger); }
+    .debate-conflict-note.no-conflict { background: #eafaf1; color: var(--success); }
+
+    /* ─── [I5] Cost estimate ─── */
+    .cost-block {
+      margin-top: 6px; border-radius: 8px;
+      background: #f0f8ff; border: 1px solid #a9d0f5;
+      padding: 7px 12px; font-size: .68rem; color: #1a5276;
+    }
+    .cost-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    .cost-total { font-weight: 700; margin-top: 4px; border-top: 1px solid #a9d0f5; padding-top: 4px; }
+
+    /* ─── Thinking indicator ─── */
     .thinking-wrap { align-self: flex-end; display: flex; align-items: flex-end; gap: 8px; }
     .thinking-bubble {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      border-bottom-left-radius: 4px;
-      padding: 14px 18px;
-      box-shadow: var(--shadow);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); border-bottom-left-radius: 4px;
+      padding: 14px 18px; box-shadow: var(--shadow);
     }
     .thinking-steps { font-size: .72rem; color: var(--muted); margin-top: 6px; }
     .dots { display: flex; gap: 5px; }
     .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--secondary);
-      animation: bounce .8s infinite;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--secondary); animation: bounce .8s infinite;
     }
     .dot:nth-child(2) { animation-delay: .15s; }
     .dot:nth-child(3) { animation-delay: .3s; }
     @keyframes bounce { 0%,80%,100%{transform:scale(.8);opacity:.5} 40%{transform:scale(1.2);opacity:1} }
 
-    /* Reflection log */
-    .reflection-toggle {
-      font-size: .7rem;
-      color: var(--secondary);
-      cursor: pointer;
-      margin-top: 6px;
-      display: inline-block;
-    }
-    .reflection-log {
-      display: none;
-      background: #f8fbfc;
-      border: 1px solid #cde8e4;
-      border-radius: 8px;
-      padding: 8px 12px;
-      margin-top: 6px;
-      font-size: .68rem;
-      color: var(--muted);
-    }
-    .reflection-log li { margin-bottom: 3px; }
-
     /* ─── Input Bar ─── */
     .input-bar {
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      padding: 12px 16px;
-      display: flex;
-      gap: 10px;
-      align-items: flex-end;
-      flex-shrink: 0;
+      background: var(--surface); border-top: 1px solid var(--border);
+      padding: 12px 16px; display: flex; gap: 10px;
+      align-items: flex-end; flex-shrink: 0;
     }
-
     #user-input {
-      flex: 1;
-      resize: none;
-      border: 1.5px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 14px;
-      font-family: inherit;
-      font-size: .92rem;
-      color: var(--text);
-      background: var(--bg);
-      outline: none;
-      max-height: 120px;
-      transition: border-color .2s;
+      flex: 1; resize: none; border: 1.5px solid var(--border);
+      border-radius: 12px; padding: 10px 14px;
+      font-family: inherit; font-size: .92rem; color: var(--text);
+      background: var(--bg); outline: none; max-height: 120px; transition: border-color .2s;
     }
     #user-input:focus { border-color: var(--secondary); }
-
     #send-btn {
-      width: 44px; height: 44px;
-      border-radius: 12px;
-      border: none;
+      width: 44px; height: 44px; border-radius: 12px; border: none;
       background: linear-gradient(135deg, var(--primary), var(--secondary));
-      color: #fff;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.2rem;
-      flex-shrink: 0;
-      transition: opacity .2s;
+      color: #fff; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-size: 1.2rem; flex-shrink: 0; transition: opacity .2s;
     }
     #send-btn:hover { opacity: .85; }
     #send-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -247,32 +251,30 @@
 
     /* Welcome */
     .welcome-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px 24px;
-      text-align: center;
-      margin: auto;
-      max-width: 440px;
-      box-shadow: var(--shadow);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 24px; text-align: center;
+      margin: auto; max-width: 460px; box-shadow: var(--shadow);
     }
     .welcome-card h2 { font-size: 1.1rem; color: var(--primary); margin-bottom: 8px; }
     .welcome-card p  { font-size: .83rem; color: var(--muted); margin-bottom: 14px; }
+    .welcome-innovations {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      justify-content: center; margin-bottom: 14px;
+    }
+    .innov-tag {
+      font-size: .65rem; padding: 3px 8px; border-radius: 10px;
+      background: #f0f4f8; border: 1px solid #c8d6e5; color: var(--muted);
+    }
     .sample-questions { display: flex; flex-direction: column; gap: 8px; }
     .sample-q {
-      padding: 9px 14px;
-      border: 1px dashed var(--secondary);
-      border-radius: 10px;
-      font-size: .8rem;
-      color: var(--primary);
-      cursor: pointer;
-      text-align: right;
-      transition: background .15s;
+      padding: 9px 14px; border: 1px dashed var(--secondary);
+      border-radius: 10px; font-size: .8rem; color: var(--primary);
+      cursor: pointer; text-align: right; transition: background .15s;
     }
     .sample-q:hover { background: #e8f7f5; }
 
     @media (max-width: 600px) {
-      .message-wrap { max-width: 92%; }
+      .message-wrap { max-width: 94%; }
       .lang-btn { padding: 4px 8px; font-size: .7rem; }
     }
   </style>
@@ -284,8 +286,9 @@
   <div class="header-left">
     <div class="logo-wrap"><img src="logo.png" alt="Logo" onerror="this.style.display='none'"/></div>
     <div>
-      <div class="header-title">SPIRAL-RAG · المساعد القانوني</div>
+      <div class="header-title">SPIRAL-RAG v3 · المساعد القانوني</div>
       <div class="header-sub">Self-reflective Legal Intelligence · يدعم العربية، الفرنسية، الإنجليزية</div>
+      <span class="header-badge">✦ Intent Routing · Semantic Authority · Temporal Supersession · Multi-Agent Debate · Cost Tracking</span>
     </div>
   </div>
   <div class="lang-selector">
@@ -302,6 +305,13 @@
     <h2>🎓 وزارة التعليم العالي والبحث العلمي</h2>
     <p>اسأل بأي لغة — عربي، فرنسي، إنجليزي أو دارجة جزائرية<br/>
        Ask in any language — Arabic, French, English, or Darija</p>
+    <div class="welcome-innovations">
+      <span class="innov-tag">🧭 Query Intent Routing</span>
+      <span class="innov-tag">🔬 Semantic Authority [LLM]</span>
+      <span class="innov-tag">⚖️ Temporal Supersession</span>
+      <span class="innov-tag">🤖 Multi-Agent Debate</span>
+      <span class="innov-tag">📊 Cost Tracker</span>
+    </div>
     <div class="sample-questions">
       <div class="sample-q" onclick="useQuestion(this)">ما هي شروط التسجيل في الدكتوراه؟</div>
       <div class="sample-q" onclick="useQuestion(this)">Quelles sont les conditions d'inscription en master?</div>
@@ -318,13 +328,12 @@
 </div>
 
 <script>
-  const chatArea = document.getElementById('chat-area');
-  const userInput = document.getElementById('user-input');
-  const sendBtn  = document.getElementById('send-btn');
+  const chatArea   = document.getElementById('chat-area');
+  const userInput  = document.getElementById('user-input');
+  const sendBtn    = document.getElementById('send-btn');
   const welcomeCard = document.getElementById('welcome-card');
   let selectedLang = 'auto';
 
-  // Language buttons
   document.querySelectorAll('.lang-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
@@ -333,20 +342,14 @@
     });
   });
 
-  // Auto-resize textarea
   userInput.addEventListener('input', () => {
     userInput.style.height = 'auto';
     userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
   });
 
-  function scrollToBottom() {
-    chatArea.scrollTop = chatArea.scrollHeight;
-  }
+  function scrollToBottom() { chatArea.scrollTop = chatArea.scrollHeight; }
 
-  function useQuestion(el) {
-    userInput.value = el.textContent;
-    send();
-  }
+  function useQuestion(el) { userInput.value = el.textContent; send(); }
 
   function addUserBubble(text) {
     if (welcomeCard.parentNode) welcomeCard.remove();
@@ -367,7 +370,7 @@
       <div class="avatar">🤖</div>
       <div class="thinking-bubble">
         <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        <div class="thinking-steps" id="thinking-steps">Initializing SPIRAL-RAG…</div>
+        <div class="thinking-steps" id="thinking-steps">Routing query intent…</div>
       </div>`;
     chatArea.appendChild(wrap);
     scrollToBottom();
@@ -389,13 +392,80 @@
     if (c >= 0.5)  return 'confidence-med';
     return 'confidence-low';
   }
-
   function confidenceEmoji(c) {
     if (c >= 0.75) return '✅';
     if (c >= 0.5)  return '⚠️';
     return '❓';
   }
 
+  // ── [I3] Supersession alerts block ──────────────────────────────────────
+  function buildSupersessionBlock(alerts) {
+    if (!alerts || !alerts.length) return '';
+    const confirmed = alerts.filter(a => a.confirmed).length;
+    const items = alerts.map(a => {
+      const cls   = a.confirmed ? 'sup-confirmed' : 'sup-candidate';
+      const badge = a.confirmed ? '⚠️ CONFIRMED' : '🔍 CANDIDATE';
+      return `<div class="supersession-item">
+        <div class="${cls}" style="margin-bottom:3px">${badge} · similarity=${a.similarity}</div>
+        <div><span class="sup-doc">📅 ${escHtml(a.newer_year)}:</span> ${escHtml(a.newer_title.substring(0,70))}${a.newer_title.length>70?'…':''}</div>
+        <div style="color:var(--muted);margin:2px 0">may supersede ↓</div>
+        <div><span class="sup-doc">📅 ${escHtml(a.older_year)}:</span> ${escHtml(a.older_title.substring(0,70))}${a.older_title.length>70?'…':''}</div>
+        <div style="margin-top:4px;font-style:italic;color:var(--muted)">${escHtml(a.verdict)}</div>
+      </div>`;
+    }).join('');
+    const headerText = confirmed
+      ? `⚠️ ${confirmed} Confirmed Temporal Supersession${confirmed>1?'s':''}`
+      : `🔍 ${alerts.length} Potential Temporal Conflict${alerts.length>1?'s':''}`;
+    return `<div class="supersession-block">
+      <div class="supersession-header" onclick="togglePanel(this)">${headerText} <span>▼</span></div>
+      <div class="supersession-body">${items}</div>
+    </div>`;
+  }
+
+  // ── [I4] Debate summary block ────────────────────────────────────────────
+  function buildDebateBlock(debate) {
+    if (!debate || !debate.advocate) return '';
+    const conflictCls  = debate.has_interpretive_conflict ? 'conflict' : 'no-conflict';
+    const conflictNote = escHtml(debate.conflict_note || '');
+    return `<div class="debate-block">
+      <div class="debate-header" onclick="togglePanel(this)">🤖 Multi-Agent Legal Debate (MALD) <span>▼</span></div>
+      <div class="debate-body">
+        <div class="debate-conflict-note ${conflictCls}">${conflictNote}</div>
+        <div class="debate-agent advocate" style="margin-top:8px">
+          <span class="debate-agent-label">⚖️ Advocate — strongest supported interpretation</span>
+          ${escHtml(debate.advocate)}
+        </div>
+        <div class="debate-agent devil">
+          <span class="debate-agent-label">👿 Devil's Advocate — challenges and alternatives</span>
+          ${escHtml(debate.devil_advocate)}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── [I5] Cost estimate block ─────────────────────────────────────────────
+  function buildCostBlock(cost) {
+    if (!cost || cost.total_cost_usd === undefined) return '';
+    const groq   = cost.groq   || {};
+    const gemini = cost.gemini || {};
+    return `<div class="cost-block">
+      <div style="font-weight:600;margin-bottom:4px">📊 API Cost Estimate (v3 pipeline)</div>
+      <div class="cost-row">
+        <span>Groq (${groq.calls||0} calls · ${(groq.input_tokens||0)+(groq.output_tokens||0)} tokens)</span>
+        <span>$${(groq.cost_usd||0).toFixed(5)}</span>
+      </div>
+      <div class="cost-row">
+        <span>Gemini (${gemini.calls||0} calls · ${(gemini.input_tokens||0)+(gemini.output_tokens||0)} tokens)</span>
+        <span>$${(gemini.cost_usd||0).toFixed(5)}</span>
+      </div>
+      <div class="cost-row cost-total">
+        <span>Total · ${cost.total_api_calls||0} API calls</span>
+        <span>$${(cost.total_cost_usd||0).toFixed(5)} USD</span>
+      </div>
+    </div>`;
+  }
+
+  // ── Main bot bubble builder ──────────────────────────────────────────────
   function addBotBubble(data) {
     const wrap = document.createElement('div');
     wrap.className = 'message-wrap bot';
@@ -404,44 +474,64 @@
     const cPct   = Math.round((data.confidence || 0) * 100);
     const cEmoji = confidenceEmoji(data.confidence || 0);
 
-    // Build citations HTML
+    // Citations HTML with authority tier badges
     let citeHtml = '';
     if (data.citations && data.citations.length) {
-      const rows = data.citations.map(c =>
-        `<div class="citation-item">
-          <span class="citation-badge">${escHtml(c.ref)}</span>
-          <span>${escHtml(c.year)} · ${escHtml(c.title.substring(0,60))}${c.title.length>60?'…':''}</span>
+      const rows = data.citations.map(c => {
+        const tierCls = `tier-${c.authority_tier || 3}`;
+        const method  = c.authority_method || 'rule';
+        return `<div class="citation-item">
+          <span class="citation-badge ${tierCls}">${escHtml(c.ref)}</span>
+          <span>${escHtml(c.year)} · ${escHtml((c.title||'').substring(0,58))}${(c.title||'').length>58?'…':''}</span>
+          <span class="cite-method" title="Authority classified by: ${method}">${method}</span>
           <span>(rel: ${c.relevance})</span>
-        </div>`
-      ).join('');
+        </div>`;
+      }).join('');
       citeHtml = `<div class="citations-block">
-        <div class="citations-title">📚 Sources / المصادر</div>
-        ${rows}
+        <div class="citations-title">📚 Sources / المصادر</div>${rows}
       </div>`;
     }
 
-    // Reflection log
+    // Reflection log (collapsible)
     let reflHtml = '';
     if (data.reflection_log && data.reflection_log.length) {
       const steps = data.reflection_log.map(s => `<li>${escHtml(s)}</li>`).join('');
       reflHtml = `
-        <span class="reflection-toggle" onclick="toggleReflection(this)">🔍 Show reasoning trace</span>
-        <ul class="reflection-log">${steps}</ul>`;
+        <span class="panel-toggle" onclick="togglePanel(this)">🔍 Show reasoning trace ▼</span>
+        <ul class="panel-body reflection-log">${steps}</ul>`;
+    }
+
+    // v3 innovation blocks
+    const supersessionHtml = buildSupersessionBlock(data.supersession_alerts);
+    const debateHtml       = buildDebateBlock(data.debate_summary);
+    const costHtml         = buildCostBlock(data.cost_estimate);
+
+    // Authority summary tags
+    let authSummaryHtml = '';
+    if (data.authority_summary) {
+      authSummaryHtml = Object.entries(data.authority_summary)
+        .map(([lbl, cnt]) => `<span class="meta-tag">📋 ${cnt} ${escHtml(lbl)}</span>`)
+        .join('');
     }
 
     wrap.innerHTML = `
       <div class="avatar">🤖</div>
-      <div style="flex:1">
+      <div style="flex:1;min-width:0">
         <div class="bubble bot">${escHtml(data.answer)}</div>
         <div class="meta-ribbon">
-          <span class="meta-tag ${cClass}">${cEmoji} Confidence: ${cPct}%</span>
+          <span class="meta-tag ${cClass}">${cEmoji} ${cPct}% confidence</span>
+          <span class="meta-tag intent">${escHtml(data.intent_label || '📖 Definitional')}</span>
           <span class="meta-tag">🌐 ${escHtml(data.language_name || data.language)}</span>
           <span class="meta-tag">📄 ${data.evidence_count || 0} docs</span>
           <span class="meta-tag">⚡ ${data.processing_time_ms || 0}ms</span>
-          ${data.corroborated_by_years && data.corroborated_by_years.length ?
-            `<span class="meta-tag confidence-high">🔗 Corroborated: ${data.corroborated_by_years.join(', ')}</span>` : ''}
+          ${data.cost_estimate && data.cost_estimate.total_cost_usd !== undefined
+            ? `<span class="meta-tag cost">💰 $${data.cost_estimate.total_cost_usd.toFixed(5)}</span>` : ''}
+          ${authSummaryHtml}
         </div>
+        ${supersessionHtml}
+        ${debateHtml}
         ${citeHtml}
+        ${costHtml}
         ${reflHtml}
       </div>`;
     chatArea.appendChild(wrap);
@@ -458,15 +548,16 @@
     scrollToBottom();
   }
 
-  function toggleReflection(el) {
-    const log = el.nextElementSibling;
-    const visible = log.style.display === 'block';
-    log.style.display = visible ? 'none' : 'block';
-    el.textContent = visible ? '🔍 Show reasoning trace' : '🔍 Hide reasoning trace';
+  function togglePanel(el) {
+    const body = el.nextElementSibling;
+    const open = body.style.display === 'block';
+    body.style.display = open ? 'none' : 'block';
+    const arrow = el.querySelector('span') || el;
+    if (arrow !== el) arrow.textContent = open ? '▼' : '▲';
   }
 
   function escHtml(s) {
-    return String(s)
+    return String(s || '')
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
@@ -480,23 +571,23 @@
     sendBtn.disabled = true;
 
     addUserBubble(question);
-    const thinkingEl = addThinking();
+    addThinking();
 
-    // Simulate live progress messages
     const steps = [
-      'Detecting language…',
-      'Expanding query variants via Groq…',
-      'Running BM25 + Semantic retrieval…',
-      'Self-reflection: scoring evidence…',
-      'Triangulating sources…',
-      'Synthesizing answer via Gemini…'
+      'Routing query intent… [I1]',
+      'Classifying authority (metadata-only)… [I2]',
+      'Running BM25 + Dense retrieval in parallel…',
+      'Self-reflection: scoring evidence relevance…',
+      'Detecting temporal supersessions… [I3]',
+      'Advocate agent arguing… [I4]',
+      'Devil\'s Advocate challenging… [I4]',
+      'Judge synthesising final answer via Gemini…',
+      'Tracking token costs… [I5]',
     ];
     let stepIdx = 0;
     const stepTimer = setInterval(() => {
-      if (stepIdx < steps.length) {
-        updateThinking(steps[stepIdx++]);
-      }
-    }, 1100);
+      if (stepIdx < steps.length) updateThinking(steps[stepIdx++]);
+    }, 900);
 
     try {
       const lang = selectedLang === 'auto' ? undefined : selectedLang;

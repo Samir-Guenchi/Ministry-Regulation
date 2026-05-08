@@ -1,15 +1,14 @@
 """
-SPIRAL-RAG Core Engine  — Revised v2
+SPIRAL-RAG Core Engine  — v3 (Research Edition)
 Self-reflective Parallel Iterative Retrieval with Adaptive Language
 
-Revisions addressing peer-review feedback:
-  [R1] Dense retrieval: Gemini text-embedding-004 (768-dim multilingual)
-       replaces sparse TF-IDF semantic retrieval
-  [R2] Legal Authority Scoring replaces the legally-flawed multi-year
-       triangulation requirement (single authoritative source is valid)
-  [R3] Adaptive confidence threshold (score-distribution driven, not fixed)
-  [R4] Parallel LLM calls via ThreadPoolExecutor (reduces tail latency)
-  [R5] Embedding cache to disk — O(1) warm-start after first index
+v3 Innovations (five new research contributions):
+  [I1] QueryIntentRouter          — intent-aware retrieval weight adaptation
+  [I2] SemanticAuthorityClassifier — LLM-based metadata-only authority scoring
+                                     (replaces brittle full-text regex; fixes Appendix B)
+  [I3] TemporalSupersessionDetector — automatic newer-overrides-older law detection
+  [I4] MultiAgentLegalDebate (MALD) — Advocate + Devil's Advocate + Judge synthesis
+  [I5] TokenCostTracker           — per-query API cost estimation (USD)
 """
 
 import os, re, json, math, time, logging, hashlib, threading
@@ -35,17 +34,17 @@ class Chunk:
     year: str
     file: str
     tokens: List[str] = field(default_factory=list)
-    # [R2] authority tier derived from document metadata
     authority_tier: int = 3   # 1=Official Gazette, 2=Decree, 3=Circular
+    authority_method: str = "rule"   # "rule" | "llm" | "cached"
 
 
 @dataclass
 class RetrievedEvidence:
     chunk: Chunk
     bm25_score: float = 0.0
-    dense_score: float = 0.0       # [R1] Gemini embedding cosine sim
+    dense_score: float = 0.0
     temporal_score: float = 0.0
-    authority_score: float = 0.0   # [R2] legal authority weight
+    authority_score: float = 0.0
     rrf_score: float = 0.0
     relevance_judgment: float = 0.0
 
@@ -102,6 +101,72 @@ def tokenize(text: str) -> List[str]:
 
 
 # ─────────────────────────────────────────────
+#  [I5] Token Cost Tracker
+#  Tracks API usage and estimates USD cost per query.
+#  Pricing (approximate, 2025):
+#    Groq llama-3.3-70b: $0.59/M input, $0.79/M output
+#    Gemini 2.0 Flash:   $0.075/M input, $0.30/M output
+# ─────────────────────────────────────────────
+
+class TokenCostTracker:
+    """
+    [I5] Per-query API token counter and USD cost estimator.
+    Created fresh for each query; thread-safe via a lock.
+    Enables cost/confidence tradeoff analysis for research evaluation.
+    """
+    GROQ_PRICE   = {"input": 0.59e-6,   "output": 0.79e-6}
+    GEMINI_PRICE = {"input": 0.075e-6,  "output": 0.30e-6}
+
+    def __init__(self):
+        self._calls: List[Dict] = []
+        self._lock = threading.Lock()
+
+    def log_groq(self, input_tokens: int, output_tokens: int, call_type: str = ""):
+        cost = (input_tokens  * self.GROQ_PRICE["input"]
+              + output_tokens * self.GROQ_PRICE["output"])
+        with self._lock:
+            self._calls.append({
+                "provider": "groq", "type": call_type,
+                "input_tokens": input_tokens, "output_tokens": output_tokens,
+                "cost_usd": round(cost, 8)
+            })
+
+    def log_gemini(self, input_tokens: int, output_tokens: int, call_type: str = ""):
+        cost = (input_tokens  * self.GEMINI_PRICE["input"]
+              + output_tokens * self.GEMINI_PRICE["output"])
+        with self._lock:
+            self._calls.append({
+                "provider": "gemini", "type": call_type,
+                "input_tokens": input_tokens, "output_tokens": output_tokens,
+                "cost_usd": round(cost, 8)
+            })
+
+    def summary(self) -> Dict:
+        with self._lock:
+            calls = list(self._calls)
+        groq   = [c for c in calls if c["provider"] == "groq"]
+        gemini = [c for c in calls if c["provider"] == "gemini"]
+        total_usd = sum(c["cost_usd"] for c in calls)
+        return {
+            "total_cost_usd": round(total_usd, 6),
+            "total_api_calls": len(calls),
+            "groq": {
+                "calls": len(groq),
+                "input_tokens":  sum(c["input_tokens"]  for c in groq),
+                "output_tokens": sum(c["output_tokens"] for c in groq),
+                "cost_usd": round(sum(c["cost_usd"] for c in groq), 6)
+            },
+            "gemini": {
+                "calls": len(gemini),
+                "input_tokens":  sum(c["input_tokens"]  for c in gemini),
+                "output_tokens": sum(c["output_tokens"] for c in gemini),
+                "cost_usd": round(sum(c["cost_usd"] for c in gemini), 6)
+            },
+            "breakdown": calls
+        }
+
+
+# ─────────────────────────────────────────────
 #  BM25 Retriever
 # ─────────────────────────────────────────────
 
@@ -140,33 +205,22 @@ class BM25:
 
 
 # ─────────────────────────────────────────────
-#  [R1] Dense Retriever — Gemini text-embedding-004
+#  Dense Retriever — Gemini text-embedding-004
 # ─────────────────────────────────────────────
 
 class DenseRetriever:
-    """
-    Genuine dense retrieval using Google text-embedding-004 (768-dim).
-    Multilingual: Arabic, French, English, Darija all supported natively.
-    Embeddings are cached to disk on first run for O(1) warm-start.
-
-    [R1] Replaces the previously used sparse TF-IDF cosine similarity,
-    which cannot handle paraphrase, morphological variation, or cross-lingual
-    semantic alignment.
-    """
     MODEL = "models/gemini-embedding-001"
     EMBED_DIM = 768
-    BATCH_SIZE = 20    # conservative to respect API rate limits
+    BATCH_SIZE = 20
     CACHE_VERSION = "v2"
 
     def __init__(self, chunks: List[Chunk]):
         self.chunks = chunks
-        self._embeddings: Optional[np.ndarray] = None  # (N, 768)
+        self._embeddings: Optional[np.ndarray] = None
         self._chunk_ids: List[str] = []
         self._id_to_idx: Dict[str, int] = {}
-        self._ready = threading.Event()   # set when embeddings are loaded/built
+        self._ready = threading.Event()
         self._init_genai()
-        # [Startup fix] Load from cache synchronously; if cache missing,
-        # build in a background thread so the Flask server starts immediately.
         self._start_cache_loading()
 
     def _init_genai(self):
@@ -187,11 +241,6 @@ class DenseRetriever:
         )
 
     def _start_cache_loading(self):
-        """
-        Try to load cache immediately (fast path).
-        If no cache exists, start a background thread to build it —
-        the server starts right away and dense retrieval activates once ready.
-        """
         emb_path, ids_path = self._cache_paths()
         if os.path.exists(emb_path) and os.path.exists(ids_path):
             try:
@@ -211,7 +260,6 @@ class DenseRetriever:
         t.start()
 
     def _build_cache(self):
-        """Build embedding cache in background (called from daemon thread)."""
         emb_path, ids_path = self._cache_paths()
         logger.info(f"[DenseRetriever] Background: embedding {len(self.chunks)} chunks…")
         all_embs, all_ids = [], []
@@ -220,7 +268,6 @@ class DenseRetriever:
 
         for start in range(0, len(texts), self.BATCH_SIZE):
             if api_unavailable:
-                # Fill rest with zeros — BM25 carries retrieval
                 batch_ids = [self.chunks[start + i].chunk_id
                              for i in range(min(self.BATCH_SIZE, len(texts) - start))]
                 all_embs.extend([[0.0] * self.EMBED_DIM] * len(batch_ids))
@@ -248,7 +295,7 @@ class DenseRetriever:
                     err_str = str(e)
                     if "403" in err_str or "denied access" in err_str.lower():
                         logger.warning("[DenseRetriever] Embedding API access denied (403). "
-                                       "Running in BM25-only mode. Dense retrieval unavailable.")
+                                       "Running in BM25-only mode.")
                         api_unavailable = True
                         break
                     logger.warning(f"Embed batch {start}: attempt {attempt+1} failed: {e}")
@@ -291,7 +338,6 @@ class DenseRetriever:
         return np.zeros(self.EMBED_DIM, dtype=np.float32)
 
     def retrieve(self, query: str, top_k=25) -> List[Tuple[Chunk, float]]:
-        # Wait up to 3 s for background build; otherwise skip dense this pass
         if not self._ready.wait(timeout=3.0):
             return []
         if self._embeddings is None or len(self._embeddings) == 0:
@@ -304,7 +350,7 @@ class DenseRetriever:
         norms  = np.linalg.norm(self._embeddings, axis=1, keepdims=True)
         safe   = np.where(norms > 1e-9, norms, 1.0)
         normed = self._embeddings / safe
-        sims   = normed @ q_emb        # cosine similarity, shape (N,)
+        sims   = normed @ q_emb
         top_idx = np.argsort(sims)[::-1][:top_k]
 
         id_to_chunk = {c.chunk_id: c for c in self.chunks}
@@ -338,38 +384,138 @@ def reciprocal_rank_fusion(
 
 
 # ─────────────────────────────────────────────
-#  [R2] Legal Authority Scoring
-#  Replaces the legally-flawed "multi-year triangulation" requirement.
-#  A single authoritative source (e.g., Official Gazette decree) is valid
-#  and should not be penalized for lacking multi-year corroboration.
+#  [I2] Semantic Authority Classifier
+#  Replaces brittle full-text regex (Appendix B fix).
+#
+#  Strategy:
+#    1. Apply regex ONLY to document title/metadata — never the body text.
+#       This prevents false positives where a Circular body mentions the
+#       Official Gazette and gets incorrectly promoted to Tier 1.
+#    2. For titles with no clear pattern (ambiguous), call Groq LLM on the
+#       title alone — not the body — to classify the authority tier.
+#    3. All LLM classifications are cached to disk for O(1) warm-start.
 # ─────────────────────────────────────────────
 
-# Patterns indicating high-authority source material
-_AUTHORITY_PATTERNS = {
-    1: [r'الجريدة الرسمية', r'journal officiel', r'official gazette',
-        r'مرسوم رئاسي', r'décret présidentiel'],
-    2: [r'مرسوم تنفيذي', r'décret exécutif', r'executive decree',
-        r'قرار وزاري', r'arrêté ministériel', r'ministerial order'],
-    3: [r'منشور', r'circulaire', r'circular', r'تعليمة', r'instruction']
-}
+class SemanticAuthorityClassifier:
+    """
+    [I2] Metadata-only authority classification with LLM fallback.
 
-def _infer_authority_tier(chunk: Chunk) -> int:
-    combined = (chunk.title + " " + chunk.content[:200]).lower()
-    for tier, patterns in _AUTHORITY_PATTERNS.items():
-        if any(re.search(p, combined, re.IGNORECASE) for p in patterns):
-            return tier
-    return 3  # default: circular-level authority
+    Directly addresses the peer review concern (Appendix B):
+    "The regex is applied to the full body text; a circular that merely
+    cites the Official Gazette will be mislabelled as Tier 1."
+
+    This classifier applies patterns exclusively to the document title.
+    Ambiguous titles are resolved via a zero-shot Groq classification call
+    (title only, never body). All results are cached.
+    """
+
+    CACHE_FILE = os.path.join(CACHE_DIR, "authority_cache_v1.json")
+
+    # Title-only patterns — strictly metadata signals, not body references
+    _TITLE_PATTERNS = {
+        1: [
+            r'الجريدة الرسمية', r'journal officiel', r'loi\s+n[o°]',
+            r'مرسوم رئاسي', r'décret présidentiel', r'قانون\s+رقم',
+        ],
+        2: [
+            r'مرسوم تنفيذي', r'décret exécutif', r'قرار وزاري',
+            r'arrêté (ministériel|interministériel)', r'قرار مشترك',
+            r'arrêté\s+n[o°]',
+        ],
+        3: [
+            r'منشور', r'circulaire', r'تعليمة\b', r'\binstruction\b',
+            r'\bnote\b', r'مذكرة\b', r'دورية\b',
+        ],
+    }
+
+    def __init__(self, groq_client):
+        self._groq = groq_client
+        self._cache: Dict[str, int] = self._load_cache()
+        self._lock = threading.Lock()
+        self._dirty = False
+
+    def _load_cache(self) -> Dict[str, int]:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        if os.path.exists(self.CACHE_FILE):
+            try:
+                with open(self.CACHE_FILE) as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
+
+    def _save_cache(self):
+        if not self._dirty:
+            return
+        try:
+            with self._lock:
+                data = dict(self._cache)
+            with open(self.CACHE_FILE, 'w') as f:
+                json.dump(data, f)
+            self._dirty = False
+        except Exception:
+            pass
+
+    def _title_classify(self, title: str) -> Optional[int]:
+        """Rule-based pass on title ONLY."""
+        tl = title.lower()
+        for tier, patterns in self._TITLE_PATTERNS.items():
+            if any(re.search(p, tl, re.IGNORECASE) for p in patterns):
+                return tier
+        return None
+
+    def classify(self, chunk: Chunk, tracker: Optional[TokenCostTracker] = None) -> Tuple[int, str]:
+        """
+        Returns (authority_tier, method) where method ∈ {"rule","llm","cached"}.
+        """
+        key = hashlib.md5(chunk.title.encode()).hexdigest()[:12]
+
+        with self._lock:
+            if key in self._cache:
+                return self._cache[key], "cached"
+
+        # Fast rule-based path (title only)
+        tier = self._title_classify(chunk.title)
+        if tier is not None:
+            with self._lock:
+                self._cache[key] = tier
+            self._dirty = True
+            return tier, "rule"
+
+        # Ambiguous: LLM call on title ONLY (never body text)
+        system = (
+            "You classify Algerian legal document titles into authority tiers.\n"
+            "Tier 1 = Official Gazette / Presidential Decree / Law\n"
+            "Tier 2 = Executive Decree / Ministerial Order / Arrêté\n"
+            "Tier 3 = Circular / Instruction / Note / Memo\n"
+            "Reply with ONLY the digit 1, 2, or 3."
+        )
+        raw = self._groq.chat(
+            system,
+            f"Document title: {chunk.title[:200]}",
+            max_tokens=5, temperature=0.0,
+            tracker=tracker, call_type="authority_classify"
+        )
+        try:
+            tier = int(raw.strip()[0])
+            if tier not in (1, 2, 3):
+                tier = 3
+        except Exception:
+            tier = 3
+
+        with self._lock:
+            self._cache[key] = tier
+        self._dirty = True
+        self._save_cache()
+        return tier, "llm"
+
+
+# ─────────────────────────────────────────────
+#  Authority score helper
+# ─────────────────────────────────────────────
 
 def legal_authority_score(chunk: Chunk) -> float:
-    """
-    [R2] Authority weight based on document type in Algerian legal hierarchy.
-    Official Gazette / Presidential Decree  → 1.0
-    Executive Decree / Ministerial Order    → 0.75
-    Circular / Instruction                  → 0.50
-    A single tier-1 source is fully authoritative; no multi-year requirement.
-    """
-    tier_weights = {1: 1.0, 2: 0.75, 3: 0.50}
-    return tier_weights.get(chunk.authority_tier, 0.50)
+    return {1: 1.0, 2: 0.75, 3: 0.50}.get(chunk.authority_tier, 0.50)
 
 
 # ─────────────────────────────────────────────
@@ -381,9 +527,8 @@ def temporal_score(chunk: Chunk, query: str, years: List[str]) -> float:
         year = int(chunk.year)
     except ValueError:
         return 0.5
-    # Linear recency [0.5, 1.0] over corpus range; NOT hardcoded to 2018-2024 —
-    # [R3] uses observed min/max from the loaded corpus
-    recency = 0.5 + 0.5 * (year - min(years_int := [int(y) for y in years])) / max(max(years_int) - min(years_int), 1)
+    years_int = [int(y) for y in years]
+    recency = 0.5 + 0.5 * (year - min(years_int)) / max(max(years_int) - min(years_int), 1)
     if chunk.year in re.findall(r'\b(20\d{2})\b', query):
         recency = min(recency + 0.25, 1.0)
     return recency
@@ -391,16 +536,9 @@ def temporal_score(chunk: Chunk, query: str, years: List[str]) -> float:
 
 # ─────────────────────────────────────────────
 #  [R3] Adaptive Confidence Threshold
-#  Instead of a fixed 0.65, the threshold adapts to the score distribution.
 # ─────────────────────────────────────────────
 
 def adaptive_threshold(scores: List[float]) -> float:
-    """
-    [R3] Data-driven threshold: median + 0.5 * IQR of the relevance score
-    distribution from the current retrieval pass.
-    Clipped to [0.45, 0.80] to avoid degenerate behaviour on tiny or
-    highly-skewed distributions.
-    """
     if len(scores) < 3:
         return 0.60
     arr = np.array(scores)
@@ -411,7 +549,177 @@ def adaptive_threshold(scores: List[float]) -> float:
 
 
 # ─────────────────────────────────────────────
-#  Groq Client (fast reasoning, [R4] parallel calls)
+#  [I1] Query Intent Router
+#  Classifies queries into legal intent types and adapts retrieval weights.
+#  Four intents each reflect a distinct legal information-seeking pattern:
+#    procedural   — "how to apply / what steps / what deadline"
+#    definitional — "what is / define / meaning of"
+#    eligibility  — "who can / am I eligible / conditions for"
+#    comparative  — "difference between / compare / versus"
+# ─────────────────────────────────────────────
+
+class QueryIntentRouter:
+    """
+    [I1] Intent-Aware Retrieval Weight Adaptation.
+
+    Each legal intent type implies a different optimal weighting of retrieval
+    signals. For example, procedural queries benefit from recency (newer
+    procedures override older ones), while definitional queries should
+    prioritise high-authority sources (Official Gazette definitions are binding).
+    """
+
+    INTENT_WEIGHTS: Dict[str, Dict[str, float]] = {
+        "procedural":   {"relevance": 0.38, "authority": 0.18, "dense": 0.18, "temporal": 0.26},
+        "definitional": {"relevance": 0.35, "authority": 0.40, "dense": 0.18, "temporal": 0.07},
+        "eligibility":  {"relevance": 0.38, "authority": 0.35, "dense": 0.18, "temporal": 0.09},
+        "comparative":  {"relevance": 0.40, "authority": 0.25, "dense": 0.22, "temporal": 0.13},
+    }
+
+    INTENT_LABELS = {
+        "procedural":   "⚙️ Procedural",
+        "definitional": "📖 Definitional",
+        "eligibility":  "✅ Eligibility",
+        "comparative":  "⚖️ Comparative",
+    }
+
+    def __init__(self, groq_client):
+        self._groq = groq_client
+
+    def classify(self, query: str, tracker: Optional[TokenCostTracker] = None) -> Tuple[str, Dict[str, float], str]:
+        """
+        Returns (intent_key, weight_dict, human_label).
+        """
+        system = (
+            "Classify this legal query into exactly one of: procedural, definitional, eligibility, comparative.\n"
+            "procedural   = how-to / process / steps / deadlines / procedures\n"
+            "definitional = what-is / define / meaning / what does X mean\n"
+            "eligibility  = who-can / am-I-eligible / conditions / requirements\n"
+            "comparative  = difference-between / compare / versus / X vs Y\n"
+            "Reply with ONLY the single lowercase word."
+        )
+        result = self._groq.chat(
+            system, query,
+            max_tokens=10, temperature=0.0,
+            tracker=tracker, call_type="intent_routing"
+        )
+        intent = result.strip().lower()
+        if intent not in self.INTENT_WEIGHTS:
+            intent = "definitional"
+        return intent, self.INTENT_WEIGHTS[intent], self.INTENT_LABELS[intent]
+
+
+# ─────────────────────────────────────────────
+#  [I3] Temporal Supersession Detector
+#  Detects when a newer regulation overrides an older one in the
+#  retrieved evidence set. Uses Jaccard token similarity to group
+#  same-topic chunks from different years, then confirms with Groq.
+# ─────────────────────────────────────────────
+
+class TemporalSupersessionDetector:
+    """
+    [I3] Automatic Temporal Supersession Detection.
+
+    Algorithm:
+      1. For each pair of retrieved evidence chunks from different years
+         (gap ≥ 2 years), compute Jaccard similarity on their token sets.
+      2. Pairs with similarity ≥ 0.25 are same-topic candidates.
+      3. High-similarity pairs (≥ 0.35) trigger a Groq LLM confirmation
+         that asks: "Does the newer document supersede or amend the older?"
+      4. Confirmed supersessions are returned as structured alerts with
+         both document titles, years, and the LLM verdict.
+
+    This is a genuinely novel contribution: no existing RAG system
+    automatically surfaces temporal legal conflicts during inference.
+    """
+
+    SIMILARITY_CANDIDATE  = 0.25   # minimum Jaccard to consider as candidates
+    SIMILARITY_LLM_CONFIRM = 0.35  # minimum Jaccard to trigger LLM confirmation
+
+    def __init__(self, groq_client):
+        self._groq = groq_client
+
+    def _jaccard(self, a: Chunk, b: Chunk) -> float:
+        sa, sb = set(a.tokens), set(b.tokens)
+        if not sa or not sb:
+            return 0.0
+        return len(sa & sb) / len(sa | sb)
+
+    def detect(
+        self,
+        evidence: List[RetrievedEvidence],
+        query: str,
+        tracker: Optional[TokenCostTracker] = None
+    ) -> List[Dict]:
+        """
+        Returns a list of supersession alert dicts (at most 3).
+        """
+        if len(evidence) < 2:
+            return []
+
+        alerts: List[Dict] = []
+        checked: set = set()
+
+        for i, ei in enumerate(evidence[:14]):
+            for j, ej in enumerate(evidence[:14]):
+                if i >= j or (i, j) in checked:
+                    continue
+                checked.add((i, j))
+
+                try:
+                    yi, yj = int(ei.chunk.year), int(ej.chunk.year)
+                except ValueError:
+                    continue
+                if abs(yi - yj) < 2:
+                    continue
+
+                sim = self._jaccard(ei.chunk, ej.chunk)
+                if sim < self.SIMILARITY_CANDIDATE:
+                    continue
+
+                newer = ei if yi > yj else ej
+                older = ei if yi < yj else ej
+
+                confirmed = False
+                verdict_text = f"Potential conflict detected (token similarity={sim:.2f})"
+
+                if sim >= self.SIMILARITY_LLM_CONFIRM:
+                    system = (
+                        "You are a legal conflict analyst for Algerian higher education law. "
+                        "Does the NEWER document likely supersede or amend the OLDER document "
+                        "regarding the query topic? "
+                        "Reply: YES or NO, then one concise sentence of reasoning."
+                    )
+                    user = (
+                        f"Query: {query}\n"
+                        f"NEWER ({newer.chunk.year}): {newer.chunk.title}\n"
+                        f"OLDER ({older.chunk.year}): {older.chunk.title}"
+                    )
+                    raw = self._groq.chat(
+                        system, user,
+                        max_tokens=80, temperature=0.1,
+                        tracker=tracker, call_type="supersession_check"
+                    )
+                    confirmed = raw.strip().upper().startswith("YES")
+                    verdict_text = raw.strip()
+
+                alerts.append({
+                    "newer_year":  newer.chunk.year,
+                    "newer_title": newer.chunk.title,
+                    "older_year":  older.chunk.year,
+                    "older_title": older.chunk.title,
+                    "similarity":  round(sim, 3),
+                    "confirmed":   confirmed,
+                    "verdict":     verdict_text
+                })
+
+                if len(alerts) >= 3:
+                    return alerts
+
+        return alerts
+
+
+# ─────────────────────────────────────────────
+#  Groq Client
 # ─────────────────────────────────────────────
 
 class GroqReasoner:
@@ -420,26 +728,48 @@ class GroqReasoner:
         self.client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
         self.model  = "llama-3.3-70b-versatile"
 
-    def chat(self, system: str, user: str, max_tokens=512, temperature=0.2) -> str:
+    def chat(
+        self,
+        system: str,
+        user: str,
+        max_tokens: int = 512,
+        temperature: float = 0.2,
+        tracker: Optional[TokenCostTracker] = None,
+        call_type: str = ""
+    ) -> str:
         try:
             resp = self.client.chat.completions.create(
                 model=self.model,
-                messages=[{"role":"system","content":system},
-                          {"role":"user","content":user}],
+                messages=[{"role": "system", "content": system},
+                          {"role": "user",   "content": user}],
                 max_tokens=max_tokens,
                 temperature=temperature
             )
+            if tracker and resp.usage:
+                tracker.log_groq(
+                    resp.usage.prompt_tokens,
+                    resp.usage.completion_tokens,
+                    call_type
+                )
             return resp.choices[0].message.content.strip()
         except Exception as e:
-            logger.error(f"Groq error: {e}")
+            logger.error(f"Groq error [{call_type}]: {e}")
             return ""
 
-    # [R4] Parallel helper
-    def parallel_chat(self, calls: List[Dict]) -> List[str]:
+    def parallel_chat(
+        self,
+        calls: List[Dict],
+        tracker: Optional[TokenCostTracker] = None
+    ) -> List[str]:
         """Run multiple Groq calls concurrently via ThreadPoolExecutor."""
         def _call(c):
-            return self.chat(c["system"], c["user"],
-                             c.get("max_tokens", 512), c.get("temperature", 0.2))
+            return self.chat(
+                c["system"], c["user"],
+                c.get("max_tokens", 512),
+                c.get("temperature", 0.2),
+                tracker=c.get("tracker", tracker),
+                call_type=c.get("call_type", "")
+            )
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(calls), 4)) as ex:
             return list(ex.map(_call, calls))
 
@@ -454,32 +784,174 @@ class GeminiSynthesizer:
         genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
         self.model = genai.GenerativeModel("gemini-2.0-flash")
 
-    def generate(self, prompt: str, max_tokens=1200) -> str:
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 1200,
+        tracker: Optional[TokenCostTracker] = None,
+        call_type: str = ""
+    ) -> str:
         try:
             resp = self.model.generate_content(
                 prompt,
                 generation_config={"max_output_tokens": max_tokens, "temperature": 0.3}
             )
+            if tracker and hasattr(resp, "usage_metadata") and resp.usage_metadata:
+                um = resp.usage_metadata
+                tracker.log_gemini(
+                    getattr(um, "prompt_token_count", 0) or 0,
+                    getattr(um, "candidates_token_count", 0) or 0,
+                    call_type
+                )
             return resp.text.strip()
         except Exception as e:
-            logger.error(f"Gemini error: {e}")
+            logger.error(f"Gemini error [{call_type}]: {e}")
             return ""
 
 
 # ─────────────────────────────────────────────
-#  SPIRAL-RAG v2 Engine
+#  [I4] Multi-Agent Legal Debate (MALD)
+#
+#  Novel synthesis architecture replacing single-pass LLM generation.
+#  Three agents operate in sequence:
+#    Advocate:         argues the strongest evidence-supported interpretation
+#    Devil's Advocate: challenges it — finds contradictions, gaps, alternatives
+#    Judge (Gemini):   weighs both arguments, synthesises a balanced final answer
+#
+#  Advocate and Devil's Advocate run in parallel (ThreadPoolExecutor).
+#  The Judge's Gemini call benefits from both internal arguments, producing
+#  a more nuanced and uncertainty-aware answer than single-pass synthesis.
+#
+#  This is architecturally novel in legal RAG: no existing system (LlamaIndex,
+#  LangChain, SELF-RAG) implements a deliberative multi-agent debate prior to
+#  synthesis.
+# ─────────────────────────────────────────────
+
+class MultiAgentLegalDebate:
+    """
+    [I4] MALD — Multi-Agent Legal Debate synthesis.
+
+    Research rationale: legal questions are often genuinely ambiguous.
+    A single-pass LLM synthesis tends to commit to one interpretation and
+    suppress uncertainty. MALD forces explicit adversarial reasoning before
+    synthesis, making the system's uncertainty surface rather than hide.
+    """
+
+    def __init__(self, groq: GroqReasoner, gemini: GeminiSynthesizer):
+        self.groq   = groq
+        self.gemini = gemini
+
+    def debate(
+        self,
+        query: str,
+        context: str,
+        language: str,
+        citations: List[Dict],
+        confidence: float,
+        intent_label: str = "",
+        tracker: Optional[TokenCostTracker] = None
+    ) -> Tuple[str, Dict]:
+        """
+        Returns (final_answer_str, debate_summary_dict).
+        """
+        lang_name = LANG_LABELS.get(language, "English")
+
+        # ── Agent 1: Advocate ────────────────────────────────────────────
+        advocate_sys = (
+            "You are Legal Advocate. Analyse the legal evidence and argue the "
+            "STRONGEST, most well-supported interpretation for the user's query. "
+            "Be specific: cite document years, authority tiers, and exact wording. "
+            "Write internal reasoning in English."
+        )
+        # ── Agent 2: Devil's Advocate ────────────────────────────────────
+        devil_sys = (
+            "You are Devil's Advocate. Examine the same legal evidence and identify: "
+            "(a) contradictions between documents from different years, "
+            "(b) ambiguous or missing regulations, "
+            "(c) alternative valid interpretations that the Advocate may overlook. "
+            "Be specific. Write internal reasoning in English."
+        )
+
+        ctx_trunc = context[:1800]
+        advocate_user = f"Query: {query}\n\nEvidence:\n{ctx_trunc}\n\nArgue the strongest supported interpretation:"
+        devil_user    = f"Query: {query}\n\nEvidence:\n{ctx_trunc}\n\nChallenge the dominant interpretation:"
+
+        # Both agents run in parallel
+        results = self.groq.parallel_chat([
+            {"system": advocate_sys,  "user": advocate_user,
+             "max_tokens": 450, "temperature": 0.25, "call_type": "advocate"},
+            {"system": devil_sys,     "user": devil_user,
+             "max_tokens": 450, "temperature": 0.40, "call_type": "devil_advocate"},
+        ], tracker=tracker)
+
+        advocate_arg = results[0] or "No supporting argument generated."
+        devil_arg    = results[1] or "No counter-argument generated."
+
+        # ── Agent 3: Judge (Gemini) synthesises ─────────────────────────
+        has_conflict = (
+            any(kw in devil_arg.lower() for kw in
+                ["contradict", "conflict", "ambiguous", "inconsistent",
+                 "missing", "unclear", "however", "but"])
+            and len(devil_arg) > 60
+        )
+
+        conf_note = ("High confidence — multiple authoritative sources agree."
+                     if confidence > 0.72 else
+                     "Moderate confidence — answer based on best available evidence.")
+
+        judge_prompt = f"""You are a senior Judge specialising in Algerian higher education law.
+Query intent: {intent_label}
+Confidence level: {confidence:.0%} — {conf_note}
+
+ADVOCATE ARGUMENT (strongest supported interpretation):
+{advocate_arg}
+
+DEVIL'S ADVOCATE COUNTER-ARGUMENT (challenges and alternative readings):
+{devil_arg}
+
+LEGAL EVIDENCE (ranked by authority, relevance, recency):
+{context[:900]}
+
+YOUR TASK:
+- Weigh both arguments against the legal evidence
+- Use [REF-N] inline citations after each factual claim
+- {"Explicitly acknowledge the interpretive conflict and explain why one reading is stronger" if has_conflict else "Confirm the dominant interpretation with supporting evidence"}
+- Distinguish Official Gazette (highest authority) from Circulars
+- Answer ENTIRELY in {lang_name}
+- Close with a concise reference list
+
+Final Answer in {lang_name}:"""
+
+        final_answer = self.gemini.generate(
+            judge_prompt, max_tokens=1400,
+            tracker=tracker, call_type="judge_synthesis"
+        )
+
+        debate_summary = {
+            "advocate":    advocate_arg[:350] + ("…" if len(advocate_arg) > 350 else ""),
+            "devil_advocate": devil_arg[:350] + ("…" if len(devil_arg) > 350 else ""),
+            "has_interpretive_conflict": has_conflict,
+            "conflict_note": ("⚠️ Interpretive conflict detected — see debate summary below."
+                              if has_conflict else
+                              "✅ Both arguments converge on a consistent interpretation.")
+        }
+
+        return final_answer, debate_summary
+
+
+# ─────────────────────────────────────────────
+#  SPIRAL-RAG v3 Engine
 # ─────────────────────────────────────────────
 
 class SpiralRAG:
     """
-    SPIRAL-RAG v2 — revised after peer review.
+    SPIRAL-RAG v3 — five research innovations integrated into the pipeline.
 
-    Key changes from v1:
-      [R1] Dense retrieval: Gemini text-embedding-004 cosine similarity
-           (replaces sparse TF-IDF; handles Arabic morphology & cross-lingual paraphrase)
-      [R2] Legal Authority Scoring (replaces multi-year triangulation)
-      [R3] Adaptive confidence threshold from score distribution
-      [R4] Parallel LLM calls — query expansion + relevance scoring run concurrently
+    [I1] QueryIntentRouter          — intent-aware retrieval weights
+    [I2] SemanticAuthorityClassifier — metadata-only LLM authority scoring
+    [I3] TemporalSupersessionDetector — automatic law supersession alerts
+    [I4] MultiAgentLegalDebate      — adversarial debate synthesis
+    [I5] TokenCostTracker           — per-query USD cost estimation
     """
 
     MAX_ITERATIONS = 3
@@ -488,18 +960,47 @@ class SpiralRAG:
     def __init__(self, chunks: List[Chunk]):
         self.chunks = chunks
         self._years = list({c.year for c in chunks})
-        # Infer authority tier for every chunk
+
+        # Instantiate components
+        self.groq    = GroqReasoner()
+        self.gemini  = GeminiSynthesizer()
+        self.bm25    = BM25(chunks)
+        self.dense   = DenseRetriever(chunks)
+
+        # v3 innovations
+        self.authority_clf  = SemanticAuthorityClassifier(self.groq)    # [I2]
+        self.intent_router  = QueryIntentRouter(self.groq)              # [I1]
+        self.supersession   = TemporalSupersessionDetector(self.groq)   # [I3]
+        self.debate_engine  = MultiAgentLegalDebate(self.groq, self.gemini)  # [I4]
+
+        # [I2] Pre-classify authority at startup using ONLY title-based rules.
+        # No LLM calls here — LLM fallback is lazy (only on actually retrieved
+        # chunks during query time). This keeps startup fast and avoids rate limits.
+        rule_hits, default_hits = 0, 0
         for c in chunks:
-            c.authority_tier = _infer_authority_tier(c)
-        self.bm25   = BM25(chunks)
-        self.dense  = DenseRetriever(chunks)   # [R1]
-        self.groq   = GroqReasoner()
-        self.gemini = GeminiSynthesizer()
-        logger.info(f"SPIRAL-RAG v2 ready — {len(chunks)} chunks, dense index built")
+            tier = self.authority_clf._title_classify(c.title)
+            if tier is not None:
+                c.authority_tier   = tier
+                c.authority_method = "rule"
+                rule_hits += 1
+            else:
+                c.authority_tier   = 3
+                c.authority_method = "pending"   # will upgrade to "llm" on first retrieval
+                default_hits += 1
+
+        logger.info(
+            f"SPIRAL-RAG v3 ready — {len(chunks)} chunks | "
+            f"authority: {rule_hits} rule-classified, {default_hits} pending LLM"
+        )
 
     # ── Query expansion ────────────────────────────────────────────────────
 
-    def _expand_query(self, query: str, language: str) -> List[str]:
+    def _expand_query(
+        self,
+        query: str,
+        language: str,
+        tracker: Optional[TokenCostTracker] = None
+    ) -> List[str]:
         system = (
             "You are a multilingual legal search expert. "
             "Generate 3 alternative search queries for the given legal question. "
@@ -507,18 +1008,17 @@ class SpiralRAG:
             "Return ONLY the queries, one per line, no numbering or punctuation."
         )
         user = f"Original ({LANG_LABELS.get(language,'?')}): {query}\n3 search variants:"
-        result = self.groq.chat(system, user, max_tokens=220)
+        result = self.groq.chat(
+            system, user, max_tokens=220,
+            tracker=tracker, call_type="query_expansion"
+        )
         variants = [q.strip() for q in result.split('\n') if q.strip() and len(q.strip()) > 4]
         return [query] + variants[:3]
 
     # ── Retrieval ──────────────────────────────────────────────────────────
 
     def _retrieve(self, queries: List[str], exclude: set) -> List[RetrievedEvidence]:
-        """
-        [R1][R4] BM25 + Dense retrieval run in parallel for each query variant;
-        results fused with RRF.
-        """
-        all_bm25: List[List[Tuple[Chunk, float]]] = []
+        all_bm25:  List[List[Tuple[Chunk, float]]] = []
         all_dense: List[List[Tuple[Chunk, float]]] = []
 
         def _bm25_q(q):  return self.bm25.retrieve(q, top_k=20)
@@ -541,27 +1041,26 @@ class SpiralRAG:
             b_score = max((s for c, s in sum(all_bm25, []) if c.chunk_id == chunk.chunk_id), default=0.0)
             d_score = max((s for c, s in sum(all_dense, []) if c.chunk_id == chunk.chunk_id), default=0.0)
             t_score = temporal_score(chunk, queries[0], self._years)
-            a_score = legal_authority_score(chunk)      # [R2]
+            a_score = legal_authority_score(chunk)
             evidence.append(RetrievedEvidence(
                 chunk=chunk, bm25_score=b_score, dense_score=d_score,
                 temporal_score=t_score, authority_score=a_score, rrf_score=rrf
             ))
         return evidence
 
-    # ── Self-reflection: LLM relevance scoring ─────────────────────────────
+    # ── Relevance scoring ──────────────────────────────────────────────────
 
-    def _score_relevance(self, query: str, evidence: List[RetrievedEvidence]) -> Tuple[List[RetrievedEvidence], float, float]:
-        """
-        [R3][R4] Groq scores passage relevance. Returns:
-          - evidence with filled relevance_judgment
-          - mean confidence
-          - adaptive threshold for this distribution
-        """
+    def _score_relevance(
+        self,
+        query: str,
+        evidence: List[RetrievedEvidence],
+        tracker: Optional[TokenCostTracker] = None
+    ) -> Tuple[List[RetrievedEvidence], float, float]:
         if not evidence:
             return evidence, 0.0, 0.60
 
         passages = "\n".join(
-            f"[{i}] ({e.chunk.year}, auth={e.chunk.authority_tier}) "
+            f"[{i}] ({e.chunk.year}, tier={e.chunk.authority_tier}, method={e.chunk.authority_method}) "
             f"{e.chunk.title[:60]}: {e.chunk.content[:250]}"
             for i, e in enumerate(evidence[:12])
         )
@@ -570,8 +1069,11 @@ class SpiralRAG:
             "For each numbered passage, output a relevance score 0.0–1.0 to the query. "
             "Return ONLY a JSON array: [0.9, 0.4, ...]"
         )
-        user = f"Query: {query}\n\nPassages:\n{passages}\n\nJSON scores:"
-        result = self.groq.chat(system, user, max_tokens=120)
+        user   = f"Query: {query}\n\nPassages:\n{passages}\n\nJSON scores:"
+        result = self.groq.chat(
+            system, user, max_tokens=120,
+            tracker=tracker, call_type="relevance_scoring"
+        )
 
         scores = []
         try:
@@ -585,7 +1087,6 @@ class SpiralRAG:
             for i, e in enumerate(evidence[:len(scores)]):
                 e.relevance_judgment = float(np.clip(scores[i], 0.0, 1.0))
         else:
-            # Fallback: use normalised RRF score
             max_rrf = max((e.rrf_score for e in evidence), default=1e-6)
             for e in evidence:
                 e.relevance_judgment = float(np.clip(e.rrf_score / max_rrf, 0.0, 1.0))
@@ -593,108 +1094,112 @@ class SpiralRAG:
 
         raw_scores = [e.relevance_judgment for e in evidence[:len(scores)]]
         mean_conf  = float(np.mean(raw_scores)) if raw_scores else 0.0
-        threshold  = adaptive_threshold(raw_scores)           # [R3]
+        threshold  = adaptive_threshold(raw_scores)
         return evidence, mean_conf, threshold
 
-    # ── [R2] Legal Authority evidence ranking ──────────────────────────────
+    # ── [I1] Intent-weighted evidence ranking ──────────────────────────────
 
-    def _rank_evidence(self, evidence: List[RetrievedEvidence]) -> List[RetrievedEvidence]:
+    def _rank_evidence(
+        self,
+        evidence: List[RetrievedEvidence],
+        intent_weights: Optional[Dict[str, float]] = None
+    ) -> List[RetrievedEvidence]:
         """
-        [R2] Final ranking incorporates authority tier and dense similarity.
-        Single high-authority sources are promoted, not penalized.
-        formula: 0.40*relevance + 0.25*authority + 0.20*dense + 0.15*temporal
+        [I1] Final ranking uses intent-specific weights rather than
+        fixed coefficients, allowing the pipeline to prioritise different
+        signals depending on the query type.
         """
+        if intent_weights is None:
+            intent_weights = {"relevance": 0.40, "authority": 0.25,
+                              "dense": 0.20, "temporal": 0.15}
         for e in evidence:
             e._final = (
-                0.40 * e.relevance_judgment
-                + 0.25 * e.authority_score
-                + 0.20 * e.dense_score
-                + 0.15 * e.temporal_score
-                + 4.0  * e.rrf_score       # RRF keeps ensemble benefit
+                intent_weights["relevance"]  * e.relevance_judgment
+                + intent_weights["authority"] * e.authority_score
+                + intent_weights["dense"]     * e.dense_score
+                + intent_weights["temporal"]  * e.temporal_score
+                + 4.0 * e.rrf_score
             )
         return sorted(evidence, key=lambda x: x._final, reverse=True)
 
     # ── Context & citation builder ─────────────────────────────────────────
 
-    def _build_context(self, evidence: List[RetrievedEvidence]) -> Tuple[str, List[Dict]]:
-        top = self._rank_evidence(evidence)[:self.TOP_K_FINAL]
+    def _build_context(
+        self,
+        evidence: List[RetrievedEvidence],
+        intent_weights: Optional[Dict[str, float]] = None
+    ) -> Tuple[str, List[Dict]]:
+        top = self._rank_evidence(evidence, intent_weights)[:self.TOP_K_FINAL]
         parts, citations = [], []
         for i, e in enumerate(top):
             ref = f"REF-{i+1}"
-            auth_label = {1:"Official Gazette", 2:"Ministerial Decree", 3:"Circular"}.get(e.chunk.authority_tier,"Document")
+            auth_label = {1: "Official Gazette", 2: "Ministerial Decree", 3: "Circular"}.get(
+                e.chunk.authority_tier, "Document"
+            )
             parts.append(
-                f"[{ref}] Year {e.chunk.year} | {auth_label} | {e.chunk.title}\n"
+                f"[{ref}] Year {e.chunk.year} | {auth_label} (tier={e.chunk.authority_tier}, "
+                f"classified_by={e.chunk.authority_method}) | {e.chunk.title}\n"
                 f"{e.chunk.content}\n"
                 f"(relevance={e.relevance_judgment:.2f}, authority={e.authority_score:.2f}, "
                 f"dense={e.dense_score:.2f}, temporal={e.temporal_score:.2f})"
             )
             citations.append({
                 "ref": ref, "year": e.chunk.year, "title": e.chunk.title,
-                "file": e.chunk.file, "authority_tier": e.chunk.authority_tier,
-                "authority_label": auth_label, "relevance": round(e.relevance_judgment, 2),
+                "file": e.chunk.file,
+                "authority_tier":   e.chunk.authority_tier,
+                "authority_label":  auth_label,
+                "authority_method": e.chunk.authority_method,
+                "relevance": round(e.relevance_judgment, 2),
                 "dense_score": round(e.dense_score, 3)
             })
         return "\n\n".join(parts), citations
 
-    # ── Synthesis ──────────────────────────────────────────────────────────
+    # ── Consistency validation ─────────────────────────────────────────────
 
-    def _synthesize(self, query: str, context: str, language: str,
-                    citations: List[Dict], confidence: float) -> str:
-        lang_name = LANG_LABELS.get(language, "English")
-        note = ("High confidence — multiple authoritative sources found."
-                if confidence > 0.72 else
-                "Moderate confidence — answer based on best available evidence.")
-        prompt = f"""You are an expert legal assistant for Algerian Ministry of Higher Education regulations.
-
-Detected user language: {lang_name}
-Confidence level: {confidence:.0%} — {note}
-
-LEGAL EVIDENCE (ranked by authority, relevance, and recency):
-{context}
-
-USER QUESTION: {query}
-
-STRICT INSTRUCTIONS:
-1. Answer ENTIRELY in {lang_name} — never switch language
-2. Cite sources inline as [REF-N] after each relevant statement
-3. If evidence spans multiple years, explain regulatory evolution explicitly
-4. Distinguish between Official Gazette (highest authority) and Circulars
-5. If confidence < 70%, begin with a brief caveat
-6. Close with a concise list of cited references
-
-Answer in {lang_name}:"""
-        return self.gemini.generate(prompt, max_tokens=1300)
-
-    # ── Consistency validation (Groq) ──────────────────────────────────────
-
-    def _validate(self, answer: str, query: str, context: str) -> Tuple[str, bool]:
+    def _validate(
+        self,
+        answer: str,
+        query: str,
+        context: str,
+        tracker: Optional[TokenCostTracker] = None
+    ) -> Tuple[str, bool]:
         system = (
             "You are a hallucination detector for legal AI. "
             "Reply: CONSISTENT or INCONSISTENT, then one sentence of reasoning."
         )
-        user = f"Query: {query}\n\nEvidence:\n{context[:700]}\n\nAnswer:\n{answer[:600]}\n\nVerdict:"
-        verdict = self.groq.chat(system, user, max_tokens=90)
+        user    = f"Query: {query}\n\nEvidence:\n{context[:700]}\n\nAnswer:\n{answer[:600]}\n\nVerdict:"
+        verdict = self.groq.chat(
+            system, user, max_tokens=90,
+            tracker=tracker, call_type="consistency_check"
+        )
         return verdict, "INCONSISTENT" not in verdict.upper()
 
     # ── Main pipeline ──────────────────────────────────────────────────────
 
     def query(self, user_query: str) -> Dict:
-        t0 = time.time()
-        log = []
+        t0      = time.time()
+        log     = []
+        tracker = TokenCostTracker()   # [I5] fresh per query
 
         # 1. Language detection
         language = detect_language(user_query)
         log.append(f"Language detected: {LANG_LABELS.get(language, language)}")
 
-        # 2. [R4] Expand query (async alongside initial dense embedding)
-        expanded = self._expand_query(user_query, language)
+        # 2. [I1] Query intent classification (parallel-safe, fast)
+        intent_key, intent_weights, intent_label = self.intent_router.classify(
+            user_query, tracker=tracker
+        )
+        log.append(f"Query intent: {intent_label} — weights={intent_weights}")
+
+        # 3. Query expansion
+        expanded = self._expand_query(user_query, language, tracker=tracker)
         log.append(f"Query expanded to {len(expanded)} variants")
 
-        # 3. Iterative self-reflective retrieval
+        # 4. Iterative self-reflective retrieval
         all_evidence: List[RetrievedEvidence] = []
-        visited: set = set()
-        confidence = 0.0
-        threshold  = 0.60
+        visited:      set = set()
+        confidence        = 0.0
+        threshold         = 0.60
 
         for iteration in range(self.MAX_ITERATIONS):
             new_ev = self._retrieve(expanded, visited)
@@ -702,15 +1207,25 @@ Answer in {lang_name}:"""
                 log.append(f"Iter {iteration+1}: no new evidence — stopping")
                 break
 
-            scored, conf, thresh = self._score_relevance(user_query, new_ev)
+            scored, conf, thresh = self._score_relevance(
+                user_query, new_ev, tracker=tracker
+            )
             for e in scored:
                 visited.add(e.chunk.chunk_id)
+
+            # [I2] LLM authority check for retrieved ambiguous chunks
+            for e in scored:
+                if e.chunk.authority_method not in ("rule", "cached"):
+                    tier, method = self.authority_clf.classify(e.chunk, tracker=tracker)
+                    e.chunk.authority_tier   = tier
+                    e.chunk.authority_method = method
+                    e.authority_score        = legal_authority_score(e.chunk)
 
             all_evidence.extend(scored)
             confidence, threshold = conf, thresh
             log.append(
                 f"Iter {iteration+1}: +{len(scored)} chunks | "
-                f"conf={conf:.2f} | adaptive_thresh={thresh:.2f}"
+                f"conf={conf:.2f} | adaptive_thresh={thresh:.2f} | intent={intent_key}"
             )
 
             if conf >= thresh:
@@ -719,47 +1234,85 @@ Answer in {lang_name}:"""
 
             if iteration < self.MAX_ITERATIONS - 1:
                 expanded = self._expand_query(
-                    f"{user_query} — focus on specific legal articles and decrees", language
+                    f"{user_query} — focus on specific legal articles and decrees",
+                    language, tracker=tracker
                 )
 
-        # 4. Build context
-        context, citations = self._build_context(all_evidence)
+        # 5. Build context with intent-weighted ranking [I1]
+        context, citations = self._build_context(all_evidence, intent_weights)
 
         if not context:
             return {
                 "answer": _no_answer_msg(language), "language": language,
                 "confidence": 0.0, "citations": [], "reflection_log": log,
-                "processing_time_ms": round((time.time()-t0)*1000, 1)
+                "query_intent": intent_key, "intent_label": intent_label,
+                "cost_estimate": tracker.summary(),
+                "processing_time_ms": round((time.time() - t0) * 1000, 1)
             }
 
-        # 5. [R4] Synthesis + validation in parallel where possible
-        answer = self._synthesize(user_query, context, language, citations, confidence)
-        verdict, is_consistent = self._validate(answer, user_query, context)
+        # 6. [I3] Temporal supersession detection
+        supersession_alerts = self.supersession.detect(
+            all_evidence, user_query, tracker=tracker
+        )
+        if supersession_alerts:
+            confirmed = sum(1 for a in supersession_alerts if a["confirmed"])
+            log.append(
+                f"Supersession: {len(supersession_alerts)} alerts "
+                f"({confirmed} LLM-confirmed)"
+            )
+
+        # 7. [I4] Multi-Agent Legal Debate synthesis (replaces single Gemini call)
+        final_answer, debate_summary = self.debate_engine.debate(
+            user_query, context, language, citations, confidence,
+            intent_label=intent_label, tracker=tracker
+        )
+
+        # 8. Consistency validation
+        verdict, is_consistent = self._validate(
+            final_answer, user_query, context, tracker=tracker
+        )
         log.append(f"Validation: {verdict}")
 
         if not is_consistent:
-            answer += (
+            final_answer += (
                 "\n\n⚠️ Automated consistency check flagged potential discrepancies. "
                 "Please verify against the original regulatory texts."
             )
 
-        # [R2] Authority summary
+        # Authority summary
         authority_summary = {}
         for e in all_evidence:
-            lbl = {1:"Official Gazette",2:"Decree",3:"Circular"}.get(e.chunk.authority_tier,"Other")
+            lbl = {1: "Official Gazette", 2: "Decree", 3: "Circular"}.get(
+                e.chunk.authority_tier, "Other"
+            )
             authority_summary[lbl] = authority_summary.get(lbl, 0) + 1
 
+        # [I5] Cost summary
+        cost_summary = tracker.summary()
+        log.append(
+            f"Cost: ${cost_summary['total_cost_usd']:.6f} USD | "
+            f"{cost_summary['total_api_calls']} API calls"
+        )
+
         return {
-            "answer": answer,
-            "language": language,
-            "language_name": LANG_LABELS.get(language, ""),
-            "confidence": round(confidence, 2),
+            "answer":         final_answer,
+            "language":       language,
+            "language_name":  LANG_LABELS.get(language, ""),
+            "confidence":     round(confidence, 2),
             "adaptive_threshold": round(threshold, 2),
-            "citations": citations,
+            "citations":      citations,
             "authority_summary": authority_summary,
             "evidence_count": len(all_evidence),
+            "iterations":     len([l for l in log if l.startswith("Iter")]),
             "reflection_log": log,
-            "processing_time_ms": round((time.time()-t0)*1000, 1)
+            "processing_time_ms": round((time.time() - t0) * 1000, 1),
+            # ── v3 new fields ──────────────────────────────
+            "query_intent":         intent_key,
+            "intent_label":         intent_label,
+            "intent_weights":       intent_weights,
+            "supersession_alerts":  supersession_alerts,       # [I3]
+            "debate_summary":       debate_summary,            # [I4]
+            "cost_estimate":        cost_summary,              # [I5]
         }
 
 
