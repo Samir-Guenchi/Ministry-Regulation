@@ -19,10 +19,11 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "data")
 
 # ─── Load data & build RAG engine ────────────
 logger.info("Loading document corpus...")
-chunks = load_all_chunks(BASE_DIR)
+chunks = load_all_chunks(DATA_DIR)
 engine = SpiralRAG(chunks)
 logger.info(f"SPIRAL-RAG ready. {len(chunks)} chunks indexed.")
 
