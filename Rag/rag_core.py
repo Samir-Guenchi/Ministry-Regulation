@@ -1010,9 +1010,17 @@ YOUR TASK:
 - {"Explicitly acknowledge the interpretive conflict and explain why one reading is stronger" if has_conflict else "Confirm the dominant interpretation with supporting evidence"}
 - Distinguish Official Gazette (highest authority) from Circulars
 - Answer ENTIRELY in {lang_name}
-- Close with a concise reference list
+- FORMAT YOUR ANSWER WITH MARKDOWN:
+  * Use # for the main answer title
+  * Use ## for major sections (e.g. الشروط الأساسية / Conditions principales / Main Conditions)
+  * Use ### for sub-sections when needed
+  * Use - bullet points for lists of conditions, steps, or requirements
+  * Use **bold** for key terms, article references, and important dates
+  * Use a ## References section at the end listing each cited document
+  * Separate sections with blank lines
+  * Do NOT use raw numbered lists without the markdown format
 
-Final Answer in {lang_name}:"""
+Final Answer in {lang_name} (structured with markdown headings and bullets):"""
 
         final_answer = self.gemini.generate(
             judge_prompt, max_tokens=1400,
@@ -1024,7 +1032,10 @@ Final Answer in {lang_name}:"""
             logger.warning("[MALD] Gemini returned empty — falling back to Groq for Judge synthesis")
             groq_judge_sys = (
                 f"You are a senior Judge specialising in Algerian higher education law. "
-                f"Answer ENTIRELY in {lang_name}. Be clear, accurate, and cite [REF-N] references inline."
+                f"Answer ENTIRELY in {lang_name}. Format your answer with Markdown: "
+                f"use # for the title, ## for sections, ### for sub-sections, "
+                f"- for bullet lists, **bold** for key terms and articles. "
+                f"Use [REF-N] citations inline. End with a ## References section."
             )
             groq_judge_user = (
                 f"Query intent: {intent_label}\n"
@@ -1034,7 +1045,7 @@ Final Answer in {lang_name}:"""
                 f"LEGAL EVIDENCE:\n{ctx_judge}\n\n"
                 f"Weigh both arguments. Use [REF-N] inline citations. "
                 f"{'Acknowledge interpretive conflict.' if has_conflict else 'Confirm dominant interpretation.'} "
-                f"Answer in {lang_name}:"
+                f"Answer in {lang_name} using markdown structure:"
             )
             final_answer = self.groq.chat(
                 groq_judge_sys, groq_judge_user,
