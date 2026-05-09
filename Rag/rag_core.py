@@ -1181,8 +1181,8 @@ class SpiralRAG:
     [I5] TokenCostTracker           — per-query USD cost estimation
     """
 
-    MAX_ITERATIONS = 3
-    TOP_K_FINAL    = 8
+    MAX_ITERATIONS = 2  # Reduced from 3 for faster responses
+    TOP_K_FINAL    = 6  # Reduced from 8 for faster processing
 
     def __init__(self, chunks: List[Chunk]):
         self.chunks = chunks
@@ -1248,8 +1248,8 @@ class SpiralRAG:
         all_bm25:  List[List[Tuple[Chunk, float]]] = []
         all_dense: List[List[Tuple[Chunk, float]]] = []
 
-        def _bm25_q(q):  return self.bm25.retrieve(q, top_k=20)
-        def _dense_q(q): return self.dense.retrieve(q, top_k=20)
+        def _bm25_q(q):  return self.bm25.retrieve(q, top_k=15)  # Reduced from 20
+        def _dense_q(q): return self.dense.retrieve(q, top_k=15)  # Reduced from 20
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
             bm25_futs  = [ex.submit(_bm25_q, q)  for q in queries]
@@ -1490,31 +1490,54 @@ class SpiralRAG:
             }
 
         # [W6] Null/unanswerable detection.
-        # Threshold is lower when running BM25-only (dense unavailable) because
-        # LLM relevance scores are intrinsically lower without dense signal.
+        # Instead of refusing, show extractive fallback with warning
         bm25_only = DenseRetriever._embed_api_blocked
-        NULL_CONFIDENCE_THRESHOLD = 0.08 if bm25_only else 0.22
+        NULL_CONFIDENCE_THRESHOLD = 0.05 if bm25_only else 0.15  # Lowered thresholds
         if confidence < NULL_CONFIDENCE_THRESHOLD:
-            null_msgs = {
-                "ar": "عذراً، لم أجد في الوثائق المتاحة ما يكفي للإجابة على سؤالك بثقة. "
-                      "يُرجى إعادة صياغة السؤال أو التحقق من مصادر وزارة التعليم العالي مباشرة.",
-                "fr": "Désolé, je n'ai pas trouvé de preuves suffisantes dans le corpus pour "
-                      "répondre à votre question avec confiance. Reformulez ou consultez "
-                      "directement les textes officiels du Ministère.",
-                "en": "I could not find sufficient authoritative evidence in the regulatory corpus "
-                      "to answer this query reliably. Please rephrase your question or consult "
-                      "the official Ministry of Higher Education texts directly.",
-                "dz": "ما لقيت دليل كافي في الوثائق باش نجاوبك بثقة. "
-                      "حاول تعاود الصياغة أو راجع النصوص الرسمية مباشرة.",
-            }
-            _emit(f"⚠️ Low confidence ({confidence:.2f}) — returning safe refusal [W6]")
+            # Build extractive fallback instead of refusing
+            lang_name = LANG_LABELS.get(language, "English")
+            parts = []
+            ctx_blocks = [b.strip() for b in context.split("\n\n") if b.strip()]
+            for i, block in enumerate(ctx_blocks[:5], start=1):
+                lines = block.splitlines()
+                header = lines[0] if lines else ""
+                body   = "\n".join(
+                    l for l in lines[1:]
+                    if not l.startswith("(relevance=")
+                ).strip()
+                if body:
+                    parts.append(f"**[REF-{i}]** {header}\n\n{body[:600]}")
+            
+            if citations:
+                cite_lines = "\n".join(
+                    f"- **[{c['ref']}]** {c['title']} ({c['year']}) — {c['authority_label']}"
+                    for c in citations[:5]
+                )
+            else:
+                cite_lines = "_No sources available._"
+            
+            note = {
+                "ar": "⚠️ ثقة منخفضة — النتائج أدناه مستخرجة مباشرة من الوثائق القانونية.",
+                "fr": "⚠️ Confiance faible — Les résultats ci-dessous sont extraits directement des textes réglementaires.",
+                "en": "⚠️ Low confidence — Results below are extracted directly from the regulatory documents.",
+                "dz": "⚠️ ثقة ضعيفة — النتائج لي تحت مستخرجة من الوثائق القانونية.",
+            }.get(language, "⚠️ Low confidence — Showing extracted source text.")
+            
+            final_answer = (
+                f"{note}\n\n"
+                f"# نتائج ذات صلة / Résultats pertinents / Relevant Results\n\n"
+                + "\n\n---\n\n".join(parts)
+                + f"\n\n## المصادر / Sources / References\n\n{cite_lines}"
+            )
+            
+            _emit(f"⚠️ Low confidence ({confidence:.2f}) — showing extractive fallback [W6]")
             return {
-                "answer":       null_msgs.get(language, null_msgs["en"]),
-                "is_answerable": False,
+                "answer":       final_answer,
+                "is_answerable": True,  # Changed to True so frontend shows the answer
                 "language":     language,
                 "language_name": LANG_LABELS.get(language, ""),
                 "confidence":   round(confidence, 2),
-                "citations":    citations[:3],   # show what was found (low relevance)
+                "citations":    citations[:5],
                 "query_intent": intent_key,
                 "intent_label": intent_label,
                 "intent_keys":  intent_keys,
@@ -1551,17 +1574,22 @@ class SpiralRAG:
         _emit("🧑‍⚖️ Judge synthesis complete (Gemini) [I4]")
 
         # 7b. Citation hallucination verification
-        # Build ref→chunk_text mapping from the ranked evidence used in synthesis
-        chunks_by_ref = {}
-        top_evidence = self._rank_evidence(all_evidence, intent_weights)[:self.TOP_K_FINAL]
-        for i, ev in enumerate(top_evidence):
-            chunks_by_ref[i + 1] = ev.chunk.content
-        final_answer, citations = verify_citations(final_answer, citations, chunks_by_ref)
-        stripped = sum(1 for c in citations if c.get("verified") is False)
-        if stripped:
-            _emit(f"⚠️ Citation verifier: {stripped} hallucinated ref(s) stripped")
+        # Skip verification if using extractive fallback (already grounded in source chunks)
+        is_extractive_fallback = "⚠️" in final_answer and "API quota" in final_answer
+        if not is_extractive_fallback:
+            # Build ref→chunk_text mapping from the ranked evidence used in synthesis
+            chunks_by_ref = {}
+            top_evidence = self._rank_evidence(all_evidence, intent_weights)[:self.TOP_K_FINAL]
+            for i, ev in enumerate(top_evidence):
+                chunks_by_ref[i + 1] = ev.chunk.content
+            final_answer, citations = verify_citations(final_answer, citations, chunks_by_ref)
+            stripped = sum(1 for c in citations if c.get("verified") is False)
+            if stripped:
+                _emit(f"⚠️ Citation verifier: {stripped} hallucinated ref(s) stripped")
+            else:
+                _emit("✅ Citation verifier: all inline refs grounded in source chunks")
         else:
-            _emit("✅ Citation verifier: all inline refs grounded in source chunks")
+            _emit("✅ Extractive fallback: skipping citation verification (already grounded)")
 
         # 8. Consistency validation
         verdict, is_consistent = self._validate(
