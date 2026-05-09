@@ -252,9 +252,8 @@ class DenseRetriever:
         self._start_cache_loading()
 
     def _init_genai(self):
-        import google.generativeai as genai
-        genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
-        self._genai = genai
+        from google import genai
+        self._genai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
     def _corpus_hash(self) -> str:
         ids = "".join(c.chunk_id for c in self.chunks[:50])
@@ -307,14 +306,12 @@ class DenseRetriever:
             success   = False
             for attempt in range(3):
                 try:
-                    result = self._genai.embed_content(
+                    result = self._genai_client.models.embed_content(
                         model=self.MODEL,
-                        content=batch,
-                        task_type="retrieval_document"
+                        contents=batch,
+                        config={"task_type": "RETRIEVAL_DOCUMENT"}
                     )
-                    embs = result["embedding"]
-                    if embs and not isinstance(embs[0], list):
-                        embs = [embs]
+                    embs = [e.values for e in result.embeddings]
                     all_embs.extend(embs)
                     all_ids.extend(batch_ids)
                     success = True
@@ -359,12 +356,12 @@ class DenseRetriever:
         if DenseRetriever._embed_api_blocked:
             return np.zeros(self.EMBED_DIM, dtype=np.float32)
         try:
-            result = self._genai.embed_content(
+            result = self._genai_client.models.embed_content(
                 model=self.MODEL,
-                content=query,
-                task_type="retrieval_query"
+                contents=query,
+                config={"task_type": "RETRIEVAL_QUERY"}
             )
-            return np.array(result["embedding"], dtype=np.float32)
+            return np.array(result.embeddings[0].values, dtype=np.float32)
         except Exception as e:
             err = str(e)
             if "403" in err or "denied access" in err.lower() or "permission" in err.lower():
@@ -807,10 +804,33 @@ class TemporalSupersessionDetector:
 # ─────────────────────────────────────────────
 
 class GroqReasoner:
+    """
+    Two-tier Groq model selection to stay within free-tier quotas.
+
+    Free-tier daily limits (tokens per day):
+      llama3-8b-8192          → 500,000 TPD   (fast, cheap)
+      llama-3.3-70b-versatile → 100,000 TPD   (strong, expensive)
+
+    Routing policy:
+      FAST_CALLS  → llama3-8b-8192          (intent, expansion, scoring,
+                                              supersession, consistency, authority)
+      STRONG_CALLS → llama-3.3-70b-versatile (advocate, devil's advocate,
+                                              judge fallback synthesis)
+    """
+    STRONG_MODEL = "llama-3.3-70b-versatile"
+    FAST_MODEL   = "llama-3.1-8b-instant"   # llama3-8b-8192 decommissioned May 2025
+
+    STRONG_CALL_TYPES = {
+        "advocate", "devil_advocate",
+        "judge_synthesis_fallback",
+    }
+
     def __init__(self):
         from groq import Groq
         self.client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
-        self.model  = "llama-3.3-70b-versatile"
+
+    def _model_for(self, call_type: str) -> str:
+        return self.STRONG_MODEL if call_type in self.STRONG_CALL_TYPES else self.FAST_MODEL
 
     def chat(
         self,
@@ -821,9 +841,10 @@ class GroqReasoner:
         tracker: Optional[TokenCostTracker] = None,
         call_type: str = ""
     ) -> str:
+        model = self._model_for(call_type)
         try:
             resp = self.client.chat.completions.create(
-                model=self.model,
+                model=model,
                 messages=[{"role": "system", "content": system},
                           {"role": "user",   "content": user}],
                 max_tokens=max_tokens,
@@ -837,7 +858,7 @@ class GroqReasoner:
                 )
             return resp.choices[0].message.content.strip()
         except Exception as e:
-            logger.error(f"Groq error [{call_type}]: {e}")
+            logger.error(f"Groq error [{call_type}] (model={model}): {e}")
             return ""
 
     def parallel_chat(
@@ -863,11 +884,47 @@ class GroqReasoner:
 # ─────────────────────────────────────────────
 
 class GeminiSynthesizer:
+    """
+    Gemini synthesis using the new google-genai SDK (v1 API).
+    Auto-discovers a working model from the candidate list at init time.
+    Free tier: gemini-1.5-flash → 1500 req/day, gemini-2.0-flash → 1500 req/day.
+    """
+    # Ordered by quota availability (lite models have higher RPM/RPD)
+    CANDIDATES = [
+        "gemini-2.0-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+    ]
+
     def __init__(self):
-        import google.generativeai as genai
-        genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
-        # gemini-1.5-flash: 1500 free-tier requests/day (vs 0 for 2.0-flash)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        from google import genai
+        from google.genai import types as gtypes
+        # Force v1 API — v1beta does not expose these models
+        self._client    = genai.Client(
+            api_key=os.environ.get("GEMINI_API_KEY", ""),
+            http_options={"api_version": "v1"}
+        )
+        self._types     = gtypes
+        self.model_name = None
+        # Probe each candidate with a tiny prompt to find a working model
+        for name in self.CANDIDATES:
+            try:
+                resp = self._client.models.generate_content(
+                    model=name,
+                    contents="ping",
+                    config=gtypes.GenerateContentConfig(
+                        max_output_tokens=4,
+                        temperature=0.0
+                    )
+                )
+                _ = resp.text  # triggers ValueError if blocked
+                self.model_name = name
+                logger.info(f"[GeminiSynthesizer] Using model: {name}")
+                break
+            except Exception as e:
+                logger.warning(f"[GeminiSynthesizer] {name} unavailable: {e}")
+        if self.model_name is None:
+            logger.error("[GeminiSynthesizer] No working Gemini model found — synthesis will use Groq fallback only")
 
     def generate(
         self,
@@ -876,11 +933,18 @@ class GeminiSynthesizer:
         tracker: Optional[TokenCostTracker] = None,
         call_type: str = ""
     ) -> str:
+        if self.model_name is None:
+            return ""
         try:
-            resp = self.model.generate_content(
-                prompt,
-                generation_config={"max_output_tokens": max_tokens, "temperature": 0.3}
+            resp = self._client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=self._types.GenerateContentConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=0.3
+                )
             )
+            text = resp.text.strip() if resp.text else ""
             if tracker and hasattr(resp, "usage_metadata") and resp.usage_metadata:
                 um = resp.usage_metadata
                 tracker.log_gemini(
@@ -888,7 +952,7 @@ class GeminiSynthesizer:
                     getattr(um, "candidates_token_count", 0) or 0,
                     call_type
                 )
-            return resp.text.strip()
+            return text
         except Exception as e:
             logger.error(f"Gemini error [{call_type}]: {e}")
             return ""
@@ -1051,6 +1115,43 @@ Final Answer in {lang_name} (structured with markdown headings and bullets):"""
                 groq_judge_sys, groq_judge_user,
                 max_tokens=900, temperature=0.25,
                 tracker=tracker, call_type="judge_synthesis_fallback"
+            )
+
+        # ── Extractive fallback: when ALL LLMs fail, build answer from chunks ──
+        if not final_answer or len(final_answer.strip()) < 20:
+            logger.warning("[MALD] All LLM synthesis failed — using extractive fallback")
+            lang_name = LANG_LABELS.get(language, "English")
+            parts = []
+            # Parse the top-N chunks from the context string
+            ctx_blocks = [b.strip() for b in context.split("\n\n") if b.strip()]
+            for i, block in enumerate(ctx_blocks[:5], start=1):
+                # Extract just the document content (skip the scoring metadata line)
+                lines = block.splitlines()
+                header = lines[0] if lines else ""
+                body   = "\n".join(
+                    l for l in lines[1:]
+                    if not l.startswith("(relevance=")
+                ).strip()
+                if body:
+                    parts.append(f"**[REF-{i}]** {header}\n\n{body[:600]}")
+            if citations:
+                cite_lines = "\n".join(
+                    f"- **[{c['ref']}]** {c['title']} ({c['year']}) — {c['authority_label']}"
+                    for c in citations[:5]
+                )
+            else:
+                cite_lines = "_No sources available._"
+            note = {
+                "ar": "⚠️ خدمة الذكاء الاصطناعي غير متاحة مؤقتاً (تجاوز حصة API). النتائج أدناه مستخرجة مباشرة من الوثائق القانونية.",
+                "fr": "⚠️ Service IA temporairement indisponible (quota API dépassé). Les résultats ci-dessous sont extraits directement des textes réglementaires.",
+                "en": "⚠️ AI synthesis temporarily unavailable (API quota exceeded). Results below are extracted directly from the regulatory documents.",
+                "dz": "⚠️ خدمة الذكاء الاصطناعي ما خدماتش دروك (quota API نفد). النتائج لي تحت مستخرجة من الوثائق القانونية.",
+            }.get(language, "⚠️ AI synthesis temporarily unavailable (API quota exceeded). Showing extracted source text.")
+            final_answer = (
+                f"{note}\n\n"
+                f"# نتائج ذات صلة / Résultats pertinents / Relevant Results\n\n"
+                + "\n\n---\n\n".join(parts)
+                + f"\n\n## المصادر / Sources / References\n\n{cite_lines}"
             )
 
         debate_summary = {
