@@ -223,7 +223,7 @@ def stats():
         "version":            "v3",
         "llms": {
             "reasoning":       "Groq llama-3.3-70b-versatile",
-            "synthesis":       "Google Gemini 2.0 Flash (Judge in MALD)",
+            "synthesis":       "Google Gemini 1.5 Flash (Judge in MALD)",
             "embedding":       "Gemini Embedding-001 (dense, 768-dim)"
         },
         "languages_supported":  list(LANG_LABELS.values()),
