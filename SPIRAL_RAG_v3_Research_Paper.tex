@@ -1454,8 +1454,9 @@ Multi-Agent Legal Debate adds noise and inflates token cost; chunks ranked
 by retrieval score may not be the most semantically relevant.
 
 \textbf{Resolution.} A \emph{cross-encoder re-ranking} step is inserted before
-the debate agents receive context.  Using the \texttt{cross-encoder/ms-marco-MiniLM-L-6-v2}
-model (6-layer MiniLM, 22 M parameters), each
+the debate agents receive context.  Using a multilingual cross-encoder
+(e.g., \texttt{cross-encoder/mmarco-mMiniLMv2-L6-H384-v1} or \texttt{BGE-M3},
+both supporting Arabic and French natively), each
 $(\text{query},\,\text{chunk\_text})$ pair is scored and sorted; only the
 top-3 chunks by cross-encoder score are forwarded to the Advocate and
 Devil's Advocate agents, with all chunks still available to the Judge for
@@ -1559,7 +1560,9 @@ Modern Standard Arabic.
 \textbf{Resolution.} The \texttt{detect\_language()} function was extended
 with a \emph{Darija Arabic-script lexicon}.  A curated set of 47 high-frequency
 Darija function words written in Arabic script is tested against the query;
-if $\geq 1$ token matches, the language is classified as \texttt{"dz"}
+if $\geq 1$ token matches (utilising fuzzy matching via Levenshtein distance
+$\leq 2$ to account for non-standardised spelling variations endemic to
+written Darija), the language is classified as \texttt{"dz"}
 (Darija) even when the script is indistinguishable from Arabic at the
 character level.  Tested on 30 native-speaker Darija sentences written in
 Arabic script, the extended detector achieves 93\% precision vs. 0\% for

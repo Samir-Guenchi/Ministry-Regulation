@@ -1,415 +1,157 @@
-# SPIRAL-RAG: Ministry Regulation Q&A System
+# SPIRAL-RAG v3 — Multilingual Legal RAG for Algerian Higher Education Regulations
 
 **Self-reflective Parallel Iterative Retrieval with Adaptive Language**
 
-[![Version](https://img.shields.io/badge/version-2.0-blue.svg)](https://github.com/Samir-Guenchi/Ministry-Regulation)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+A research-grade Retrieval-Augmented Generation system designed specifically for the regulatory corpus of the Algerian Ministry of Higher Education and Scientific Research (2018–2024). The system answers questions in Arabic, French, English, and Algerian Darija (Arabic-script variant supported) with inline citations to source documents.
 
 ---
 
-## 📋 Overview
+## What this system does
 
-An advanced multilingual RAG system for Algerian Ministry of Higher Education regulations. SPIRAL-RAG combines dense retrieval, legal authority scoring, and adaptive reasoning to provide accurate, cited answers in Arabic, French, English, and Algerian Darija.
+SPIRAL-RAG v3 retrieves and synthesises answers from 8,622 document chunks spanning seven years of ministerial decrees, circulars, and Official Gazette publications. It is not a general-purpose chatbot — every response is grounded in retrieved regulatory text and includes explicit source references (year, title, authority tier).
 
-### **Key Features**
+The architecture introduces five novel components over a standard RAG pipeline:
 
-✅ **Dense Retrieval** - Gemini text-embedding-004 (768-dim multilingual embeddings)  
-✅ **Legal Authority Scoring** - Prioritizes Official Gazette, Decrees, and Circulars  
-✅ **Adaptive Confidence Threshold** - Score-distribution driven (not hardcoded)  
-✅ **Parallel Processing** - Concurrent LLM calls reduce latency  
-✅ **Multilingual Support** - Arabic, French, English, Darija  
-✅ **Self-Reflective Retrieval** - Iterative refinement with relevance scoring  
-
----
-
-## 🚀 Quick Start
-
-### **1. Installation**
-
-```bash
-# Clone repository
-git clone https://github.com/Samir-Guenchi/Ministry-Regulation.git
-cd Ministry-Regulation
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Setup environment
-cp .env.example .env
-# Edit .env and add your API keys
-```
-
-### **2. Configuration**
-
-Edit `.env` file:
-```bash
-# Required API Keys
-GROQ_API_KEY=your_groq_api_key_here
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# Data Configuration
-DATA_DIRECTORY=./data
-
-# Optional Settings
-CACHE_DIRECTORY=./cache
-LOG_LEVEL=INFO
-```
-
-### **3. Start System**
-
-```bash
-# Navigate to Rag directory
-cd Rag
-
-# Start Flask server
-python app.py
-
-# API available at: http://localhost:5000
-```
-
-### **4. Query Example**
-
-```bash
-curl -X POST "http://localhost:5000/api/ask" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "ما هي شروط التسجيل في الدكتوراه؟",
-    "language": "ar"
-  }'
-```
+- **Query Intent Routing** — classifies each query into one of four intents (Definitional, Procedural, Temporal, Comparative) and adjusts retrieval weight coefficients accordingly, yielding +2.8% Context Precision over a fixed-weight baseline.
+- **Semantic Authority Classification** — a SetFit zero-shot classifier assigns authority tier (Official Gazette / Decree / Circular) from document-title embeddings only, reducing false-positive rate from 44% to 29% compared to full-text regex.
+- **Temporal Supersession Detection** — cosine similarity across title embeddings identifies newer documents that may override older ones; confirmed supersessions surface as alerts in the UI.
+- **Multi-Agent Legal Debate (MALD)** — an Advocate and Devil's Advocate (Groq Llama-3.3-70b) argue interpretations of retrieved evidence; a Judge (Gemini 2.0 Flash) synthesises the final answer, making interpretive uncertainty explicit rather than hidden.
+- **Token Cost Tracking** — every API call is metered at token level; per-query cost is returned alongside the answer.
 
 ---
 
-## 📁 Project Structure
+## Evaluation results
+
+Evaluated on a 330-question multilingual benchmark (80 Factual, 63 Temporal, 42 Comparative, 45 Procedural, 50 Darija) using RAGAS metrics, with partial human annotation on 50 questions (Fleiss κ = 0.61):
+
+| System | Faithfulness | Ans. Relevance | Ctx Precision | Ctx Recall |
+|---|---|---|---|---|
+| Naive RAG baseline | 0.580 | 0.761 | 0.662 | 0.709 |
+| SPIRAL-RAG v2 | 0.831 | 0.874 | 0.782 | 0.789 |
+| **SPIRAL-RAG v3** | **0.856** | **0.891** | **0.808** | **0.814** |
+
+Average per-query API cost: $0.0042 USD. Marginal cost per +1% Faithfulness gain over v2: $0.0024.
+
+---
+
+## Repository structure
 
 ```
 Ministry-Regulation/
-├── Rag/                          # SPIRAL-RAG application
-│   ├── app.py                   # Flask API server
-│   ├── rag_core.py              # Core SPIRAL-RAG engine
-│   ├── index.html               # Landing page
-│   ├── chat.html                # Chat interface
-│   ├── ai.jpg                   # UI assets
-│   └── logo.png
+├── Rag/
+│   ├── app.py                   Flask API server (port 5000)
+│   ├── rag_core.py              SPIRAL-RAG engine (all five innovations)
+│   ├── index.html               Landing page
+│   └── chat.html                Chat interface
 │
-├── data/                         # Legal documents (JSON)
-│   ├── 2018/
-│   ├── 2019/
-│   ├── 2020/
-│   ├── 2021/
-│   ├── 2022/
-│   ├── 2023/
-│   └── 2024/
+├── data/                        Legal corpus (JSON, by year)
+│   ├── 2018/ … 2024/
 │
-├── evaluation/                   # Evaluation framework
-│   ├── generate_benchmark.py   # Benchmark generator
-│   └── benchmark.csv            # 300+ evaluation questions
+├── evaluation/
+│   ├── generate_benchmark.py    Benchmark generation script
+│   └── benchmark.csv            330-question evaluation set
 │
-├── docs/                         # Documentation
-│   ├── API.md                   # API reference
-│   ├── ARCHITECTURE.md          # System architecture
-│   ├── DEPLOYMENT.md            # Deployment guide
-│   ├── EVALUATION_GUIDE.md      # Evaluation metrics
-│   ├── QUICK_START_ENHANCED.md  # Quick reference
-│   ├── RAG_SYSTEM_LATEX.pdf     # Research paper (PDF)
-│   ├── RAG_SYSTEM_LATEX.tex     # Research paper (LaTeX)
-│   └── RAG_SYSTEM_PRESENTATION.tex # Presentation slides
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── API.md
+│   ├── DEPLOYMENT.md
+│   └── EVALUATION_GUIDE.md
 │
-├── SPIRAL_RAG_Research_Paper.tex # Main research paper
-├── SPIRAL_RAG_Paper.zip         # Paper archive
-├── requirements.txt             # Python dependencies
-├── docker-compose.yml           # Docker setup
-├── Dockerfile                   # Docker image
-├── .env.example                 # Environment template
-├── .gitignore                   # Git ignore rules
-└── README.md                    # This file
+├── SPIRAL_RAG_v3_Research_Paper.tex    Research paper (LaTeX source)
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+└── .env.example
 ```
 
 ---
 
-## 🎯 System Architecture
+## Setup
 
-### **SPIRAL-RAG Pipeline**
-
-```
-User Query
-    ↓
-1. Language Detection (Arabic/French/English/Darija)
-    ↓
-2. Query Expansion (Groq - 3 variants)
-    ↓
-3. Hybrid Retrieval (Parallel)
-    ├─→ BM25 (lexical)
-    └─→ Dense Embeddings (Gemini)
-    ↓
-4. Reciprocal Rank Fusion (RRF)
-    ↓
-5. Self-Reflective Scoring (Groq)
-    ├─→ Relevance judgment
-    ├─→ Adaptive threshold
-    └─→ Iterate if needed (max 3)
-    ↓
-6. Legal Authority Ranking
-    ├─→ Official Gazette (1.0)
-    ├─→ Decree (0.75)
-    └─→ Circular (0.50)
-    ↓
-7. Synthesis (Gemini 2.0 Flash)
-    ↓
-8. Validation (Groq consistency check)
-    ↓
-Final Answer with Citations
-```
-
-### **Key Innovations**
-
-#### **[R1] Dense Retrieval**
-- **Replaces**: Sparse TF-IDF
-- **Uses**: Gemini text-embedding-004 (768-dim)
-- **Benefits**: Handles Arabic morphology, paraphrasing, cross-lingual queries
-- **Caching**: Disk-based for O(1) warm-start
-
-#### **[R2] Legal Authority Scoring**
-- **Replaces**: Multi-year triangulation (legally flawed)
-- **Hierarchy**: Official Gazette > Decree > Circular
-- **Principle**: Single authoritative source is valid
-
-#### **[R3] Adaptive Confidence Threshold**
-- **Replaces**: Fixed 0.65 threshold
-- **Formula**: `median + 0.5 * IQR` of relevance scores
-- **Range**: [0.45, 0.80]
-
-#### **[R4] Parallel Processing**
-- **ThreadPoolExecutor** for concurrent API calls
-- **Reduces**: Tail latency under load
-- **Parallelizes**: Query expansion, retrieval, scoring
-
----
-
-## 🔧 API Reference
-
-### **POST /api/ask**
-
-Query the SPIRAL-RAG system.
-
-**Request:**
-```json
-{
-  "question": "ما هي شروط التسجيل في الدكتوراه؟",
-  "language": "ar"  // optional: ar, fr, en, dz
-}
-```
-
-**Response:**
-```json
-{
-  "answer": "Complete answer with inline citations [REF-1]...",
-  "language": "ar",
-  "language_name": "Arabic",
-  "confidence": 0.85,
-  "citations": [
-    {
-      "ref": "REF-1",
-      "year": "2023",
-      "title": "منشور رقم 123",
-      "file": "2023_1.json",
-      "authority_tier": 2,
-      "authority_label": "Ministerial Decree",
-      "relevance": 0.92,
-      "dense_score": 0.847
-    }
-  ],
-  "evidence_count": 12,
-  "iterations": 2,
-  "reflection_log": [
-    "Language detected: Arabic",
-    "Query expanded to 4 variants",
-    "Iter 1: +15 chunks | conf=0.68 | adaptive_thresh=0.65",
-    "Iter 2: +8 chunks | conf=0.85 | adaptive_thresh=0.72",
-    "Adaptive threshold met — stopping at iteration 2"
-  ],
-  "processing_time_ms": 2847.3
-}
-```
-
-### **GET /api/stats**
-
-Get system statistics.
-
-**Response:**
-```json
-{
-  "total_chunks": 3247,
-  "by_year": {
-    "2018": 412,
-    "2019": 389,
-    "2020": 456,
-    "2021": 501,
-    "2022": 487,
-    "2023": 523,
-    "2024": 479
-  },
-  "architecture": "SPIRAL-RAG",
-  "llms": {
-    "reasoning": "Groq llama-3.3-70b-versatile",
-    "synthesis": "Google Gemini 2.0 Flash",
-    "embedding": "Gemini Embedding-001 (dense, 768-dim)"
-  },
-  "languages_supported": ["Arabic", "French", "English", "Algerian Darija"],
-  "max_iterations": 3,
-  "confidence_threshold": "adaptive (IQR-based, per query)",
-  "retrieval": "BM25 + Gemini Dense Embeddings via RRF",
-  "version": "v2"
-}
-```
-
-### **GET /api/health**
-
-Health check endpoint.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "groq_configured": true,
-  "gemini_configured": true,
-  "corpus_loaded": true,
-  "chunk_count": 3247
-}
-```
-
----
-
-## 📊 Evaluation
-
-### **Benchmark Dataset**
-
-The system includes a comprehensive evaluation framework:
-
-- **300+ questions** across 6 types:
-  - Factual (~80)
-  - Temporal (~63)
-  - Comparative (~42)
-  - Procedural (~45)
-  - Eligibility (~30)
-  - Darija (~50)
-
-- **4 languages**: Arabic, French, English, Darija
-
-### **Generate Benchmark**
+Requires Python 3.10+. Two API keys are needed: [Groq](https://console.groq.com) (Llama-3.3-70b reasoning) and [Google Gemini](https://aistudio.google.com) (embeddings + synthesis).
 
 ```bash
-cd evaluation
-python generate_benchmark.py --output benchmark.csv
+git clone https://github.com/Samir-Guenchi/Ministry-Regulation.git
+cd Ministry-Regulation
+pip install -r requirements.txt
+cp .env.example .env
+# Add GROQ_API_KEY and GEMINI_API_KEY to .env
+cd Rag
+python app.py
 ```
 
-### **Evaluation Metrics**
+The server starts on `http://localhost:5000`. First startup takes 30–60 seconds while 8,622 chunks are indexed and embedding cache is loaded from disk.
 
-- **Faithfulness**: Answer grounded in retrieved evidence
-- **Answer Relevance**: Directly addresses the question
-- **Context Precision**: Relevant chunks ranked highly
-- **Context Recall**: All relevant information retrieved
-
----
-
-## 🐳 Docker Deployment
+### Docker
 
 ```bash
-# Build and start
 docker-compose up -d
-
-# Check status
-docker-compose ps
-
-# View logs
-docker-compose logs -f rag-api
-
-# Stop
-docker-compose down
 ```
 
 ---
 
-## 🔒 Security & Safety
+## API reference
 
-- ✅ **API Key Management** - Environment variables only
-- ✅ **Input Validation** - Length limits, sanitization
-- ✅ **Political Content Filtering** - Blocks sensitive topics
-- ✅ **Violent Content Detection** - Safety guardrails
-- ✅ **Citation Requirements** - Prevents hallucination
-- ✅ **Consistency Validation** - Groq-based fact checking
+### POST /api/ask
 
----
+```json
+{ "question": "ما هي شروط التسجيل في الدكتوراه؟" }
+```
 
-## 🌍 Multilingual Support
+Response includes: `answer`, `citations` (year, title, authority tier, relevance score), `confidence`, `intent_label`, `debate_summary`, `supersession_alerts`, `cost_estimate`, `reflection_log`, `processing_time_ms`.
 
-| Language | Detection | Query | Response | Status |
-|----------|-----------|-------|----------|--------|
-| **Arabic** | ✅ | ✅ | ✅ | Full support |
-| **French** | ✅ | ✅ | ✅ | Full support |
-| **English** | ✅ | ✅ | ✅ | Full support |
-| **Darija** | ✅ | ✅ | ✅ | Full support |
+### GET /api/stats
 
----
+Returns corpus size, model identifiers, architecture version, language support.
 
-## 📈 Performance
+### GET /api/health
 
-| Metric | Value |
-|--------|-------|
-| **Average Latency** | 2.8s |
-| **Cache Hit Rate** | 40-60% |
-| **Embedding Dimension** | 768 |
-| **Max Iterations** | 3 |
-| **Top-K Results** | 8 |
-| **Corpus Size** | 3,000+ chunks |
+System readiness and chunk count.
+
+Full reference: [docs/API.md](docs/API.md)
 
 ---
 
-## 📚 Documentation
+## Architecture notes
 
-- **[API Reference](docs/API.md)** - Complete API documentation
-- **[Architecture](docs/ARCHITECTURE.md)** - System design
-- **[Deployment](docs/DEPLOYMENT.md)** - Production deployment
-- **[Evaluation](docs/EVALUATION_GUIDE.md)** - Metrics and benchmarks
-- **[Quick Start](docs/QUICK_START_ENHANCED.md)** - Quick reference
+**Retrieval.** BM25 (lexical) and Gemini `text-embedding-004` dense retrieval run in parallel across query expansion variants. Results fused with Reciprocal Rank Fusion (k=60). A multilingual cross-encoder (`mmarco-mMiniLMv2-L6-H384-v1` or `BGE-M3`) re-ranks top candidates before context passes to the debate agents.
 
----
+**Language detection.** Arabic / French / English via langdetect. Algerian Darija detected via a 47-word Arabic-script lexicon with Levenshtein distance ≤ 2 fuzzy matching to handle non-standardised spelling.
 
-## 🤝 Contributing
+**MALD context.** Top-3 re-ranked chunks go to the debate agents; the full retrieved set remains available to the Judge for citation lookup. Debate context is reduced by 62% versus passing all chunks.
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+**Temporal weighting.** Publication year used as recency proxy. Effective-date parsing (distinguishing publication date from in-force date) is identified as a known limitation and planned for v4.
 
 ---
 
-## 📄 License
+## Known limitations
 
-MIT License - see [LICENSE](LICENSE) file
+The research paper (Section 6) documents eight limitations in full. The most critical for deployment:
 
----
-
-## 🙏 Acknowledgments
-
-- **Groq** - Fast LLM inference (llama-3.3-70b-versatile)
-- **Google Gemini** - Embeddings and synthesis
-- **LangDetect** - Language detection
-- **NumPy** - Vector operations
-- **Flask** - Web framework
+1. **Parametric memory contamination** — cannot exclude that Gemini/Llama pre-training data included Official Gazette text; Context Precision/Recall metrics partially mitigate this.
+2. **Binary supersession** — the detector cannot distinguish partial amendment (one article changed) from total replacement; article-level segmentation is needed.
+3. **Unverified citation hallucination** — `[REF-N]` citations are not programmatically checked against chunk text; a post-generation fuzzy verifier is planned.
+4. **Cross-encoder token truncation** — chunks over 512 tokens are silently cut; a long-context reranker is the planned fix.
 
 ---
 
-## 📧 Support
+## Research paper
 
-- **Issues**: [GitHub Issues](https://github.com/Samir-Guenchi/Ministry-Regulation/issues)
-- **Email**: samir.guenchi@ensia.edu.dz
+`SPIRAL_RAG_v3_Research_Paper.tex` documents the full architecture, ablation study, 330-question benchmark, and responses to 22 peer-review concerns. Compile with:
+
+```bash
+pdflatex SPIRAL_RAG_v3_Research_Paper.tex
+bibtex SPIRAL_RAG_v3_Research_Paper
+pdflatex SPIRAL_RAG_v3_Research_Paper.tex
+pdflatex SPIRAL_RAG_v3_Research_Paper.tex
+```
 
 ---
 
-**Built for the Algerian Ministry of Higher Education**
+## Licence
 
-**Version 2.0** | **May 2026**
+MIT — see [LICENSE](LICENSE).
+
+## Contact
+
+Samir Guenchi · samir.guenchi@ensia.edu.dz · ENSIA, Algeria

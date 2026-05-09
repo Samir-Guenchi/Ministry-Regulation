@@ -1,386 +1,515 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SPIRAL-RAG — وزارة التعليم العالي</title>
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+  <title>SPIRAL-RAG v3 — Legal Intelligence for Algerian Higher Education</title>
+  <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --primary: #005e7c;
-      --secondary: #00a896;
-      --accent: #f9c80e;
-      --dark: #0d1b2a;
-      --light: #f4f8fb;
-      --border: #dde3eb;
+      --ink:       #1c2330;
+      --ink-light: #4a5568;
+      --rule:      #d4dae3;
+      --teal:      #005e7c;
+      --teal-mid:  #007a99;
+      --teal-pale: #e8f3f6;
+      --gold:      #b7821a;
+      --gold-pale: #fdf4e3;
+      --bg:        #f7f8fa;
+      --white:     #ffffff;
+      --mono:      'Courier New', monospace;
     }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    html { scroll-behavior: smooth; }
-    body { font-family: 'Tajawal','Inter',sans-serif; background: var(--light); color: var(--dark); }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.65;
+    }
 
-    /* NAV */
+    /* ── Navigation ── */
     nav {
-      position: fixed; top:0; width:100%; z-index:100;
-      background: rgba(0,94,124,.97);
-      backdrop-filter: blur(8px);
-      padding: 0 6%;
+      position: fixed; top: 0; width: 100%; z-index: 200;
+      background: var(--white);
+      border-bottom: 1px solid var(--rule);
+      padding: 0 7%;
       display: flex; align-items: center; justify-content: space-between;
-      height: 62px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.15);
+      height: 56px;
     }
-    .nav-brand { color:#fff; font-size:1rem; font-weight:700; display:flex; align-items:center; gap:10px; }
-    .nav-brand img { width:36px; height:36px; border-radius:8px; }
-    .nav-links { display:flex; gap:24px; list-style:none; }
-    .nav-links a { color:rgba(255,255,255,.85); text-decoration:none; font-size:.87rem; transition:color .2s; }
-    .nav-links a:hover { color:#fff; }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 600; font-size: .92rem; color: var(--teal);
+      text-decoration: none;
+    }
+    .nav-logo img { width: 30px; height: 30px; border-radius: 6px; }
+    .nav-links { display: flex; gap: 28px; list-style: none; }
+    .nav-links a {
+      font-size: .82rem; color: var(--ink-light);
+      text-decoration: none; letter-spacing: .02em;
+      transition: color .15s;
+    }
+    .nav-links a:hover { color: var(--teal); }
     .nav-cta {
-      background: var(--accent); color: #1a1a1a;
-      padding: 8px 20px; border-radius: 20px;
-      font-weight: 700; font-size: .85rem; text-decoration:none;
-      transition: transform .2s;
+      background: var(--teal); color: #fff;
+      padding: 7px 18px; border-radius: 4px;
+      font-size: .82rem; font-weight: 500;
+      text-decoration: none; transition: background .15s;
     }
-    .nav-cta:hover { transform: translateY(-1px); }
+    .nav-cta:hover { background: var(--teal-mid); }
 
-    /* HERO */
+    /* ── Hero ── */
     .hero {
-      min-height: 100vh;
-      background: linear-gradient(135deg, #003d52 0%, #005e7c 40%, #00a896 100%);
-      display: flex; flex-direction:column; align-items:center; justify-content:center;
-      text-align:center; padding: 80px 6% 60px;
-      position: relative; overflow:hidden;
+      padding: 130px 7% 80px;
+      background: var(--white);
+      border-bottom: 1px solid var(--rule);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
     }
-    .hero::before {
-      content:'';
-      position:absolute; inset:0;
-      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-    }
-    .hero-badge {
-      display:inline-flex; align-items:center; gap:8px;
-      background: rgba(255,255,255,.15);
-      border: 1px solid rgba(255,255,255,.3);
-      border-radius: 30px; padding: 6px 18px;
-      color: #fff; font-size: .8rem; margin-bottom:24px;
+    .hero-label {
+      font-size: .72rem; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--gold);
+      margin-bottom: 16px;
     }
     .hero h1 {
-      font-size: clamp(2rem, 5vw, 3.5rem);
-      font-weight: 900;
-      color: #fff;
-      line-height: 1.2;
-      margin-bottom: 10px;
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: clamp(2rem, 3.5vw, 3rem);
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.25;
+      margin-bottom: 16px;
     }
-    .hero h1 span { color: var(--accent); }
-    .hero-sub {
-      font-size: clamp(.9rem, 2vw, 1.15rem);
-      color: rgba(255,255,255,.8);
-      max-width: 620px;
-      margin: 0 auto 32px;
-      line-height: 1.7;
+    .hero h1 em { color: var(--teal); font-style: normal; }
+    .hero-desc {
+      font-size: .93rem; color: var(--ink-light);
+      max-width: 480px; margin-bottom: 28px; line-height: 1.75;
     }
-    .hero-actions { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+    .hero-actions { display: flex; gap: 12px; align-items: center; }
     .btn-primary {
-      background: var(--accent); color: #1a1a1a;
-      padding: 13px 32px; border-radius: 30px;
-      font-size: 1rem; font-weight: 700; text-decoration:none;
-      transition: all .2s; box-shadow: 0 4px 18px rgba(249,200,14,.35);
+      background: var(--teal); color: #fff;
+      padding: 11px 24px; border-radius: 4px;
+      font-size: .88rem; font-weight: 500;
+      text-decoration: none; transition: background .15s;
     }
-    .btn-primary:hover { transform:translateY(-2px); box-shadow: 0 8px 24px rgba(249,200,14,.45); }
-    .btn-outline {
-      border: 2px solid rgba(255,255,255,.5);
-      color: #fff; padding: 13px 28px; border-radius: 30px;
-      font-size: 1rem; text-decoration:none; transition: all .2s;
+    .btn-primary:hover { background: var(--teal-mid); }
+    .btn-ghost {
+      color: var(--teal); font-size: .88rem;
+      text-decoration: none; border-bottom: 1px solid var(--teal);
+      padding-bottom: 1px; transition: opacity .15s;
     }
-    .btn-outline:hover { background: rgba(255,255,255,.1); }
+    .btn-ghost:hover { opacity: .7; }
 
-    /* STATS BAR */
-    .stats-bar {
-      background: #fff;
-      border-bottom: 1px solid var(--border);
-      padding: 18px 6%;
-      display: flex; flex-wrap:wrap; gap:8px; justify-content:center;
+    /* Hero metrics panel */
+    .hero-metrics {
+      background: var(--bg);
+      border: 1px solid var(--rule);
+      border-radius: 8px;
+      padding: 28px;
     }
-    .stat-item {
-      text-align:center; padding: 8px 24px;
-      border-right: 1px solid var(--border);
+    .metrics-title {
+      font-size: .72rem; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--ink-light);
+      margin-bottom: 20px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--rule);
     }
-    .stat-item:last-child { border:none; }
-    .stat-num { font-size:1.5rem; font-weight:800; color:var(--primary); }
-    .stat-label { font-size:.75rem; color:#6b7a8d; margin-top:2px; }
+    .metric-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 9px 0; border-bottom: 1px solid var(--rule);
+      font-size: .85rem;
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { color: var(--ink-light); }
+    .metric-val { font-weight: 600; color: var(--teal); font-variant-numeric: tabular-nums; }
+    .metric-delta { font-size: .72rem; color: #2d7d46; margin-left: 6px; }
 
-    /* ARCHITECTURE */
-    .section { padding: 72px 6%; }
+    /* ── Section base ── */
+    section { padding: 72px 7%; }
+    .section-label {
+      font-size: .72rem; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--gold); margin-bottom: 10px;
+    }
     .section-title {
-      text-align:center; font-size:clamp(1.4rem,3vw,2rem);
-      font-weight:800; color:var(--primary); margin-bottom:10px;
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 600;
+      color: var(--ink); margin-bottom: 10px;
     }
-    .section-sub { text-align:center; color:#6b7a8d; max-width:560px; margin:0 auto 48px; font-size:.9rem; }
+    .section-desc { font-size: .88rem; color: var(--ink-light); max-width: 560px; margin-bottom: 44px; }
 
-    .arch-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; }
-    .arch-card {
-      background:#fff; border:1px solid var(--border);
-      border-radius:16px; padding:24px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.05);
-      transition: transform .2s, box-shadow .2s;
+    /* ── Innovations grid ── */
+    .innovations { background: var(--white); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .innov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+    .innov-card {
+      background: var(--white);
+      padding: 28px 24px;
+      transition: background .15s;
     }
-    .arch-card:hover { transform:translateY(-3px); box-shadow:0 8px 24px rgba(0,0,0,.1); }
-    .arch-icon { font-size:2rem; margin-bottom:12px; }
-    .arch-card h3 { font-size:.95rem; font-weight:700; color:var(--primary); margin-bottom:8px; }
-    .arch-card p { font-size:.82rem; color:#6b7a8d; line-height:1.6; }
-    .arch-tag {
-      display:inline-block; margin-top:10px;
-      background:#e8f5f3; color:var(--secondary);
-      border-radius:20px; padding:3px 10px; font-size:.7rem; font-weight:600;
+    .innov-card:hover { background: var(--teal-pale); }
+    .innov-id {
+      font-family: var(--mono);
+      font-size: .72rem; color: var(--gold);
+      font-weight: 600; margin-bottom: 10px;
+    }
+    .innov-card h3 { font-size: .95rem; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+    .innov-card p { font-size: .8rem; color: var(--ink-light); line-height: 1.65; }
+    .innov-gain {
+      display: inline-block; margin-top: 12px;
+      font-size: .7rem; font-weight: 600;
+      background: var(--teal-pale); color: var(--teal);
+      border: 1px solid #b5d8e4; border-radius: 3px;
+      padding: 2px 8px;
     }
 
-    /* PIPELINE */
-    .pipeline { background: var(--dark); padding: 72px 6%; }
-    .pipeline .section-title { color:#fff; }
-    .pipeline .section-sub { color:rgba(255,255,255,.6); }
-    .steps { display:flex; flex-direction:column; gap:0; max-width:700px; margin:0 auto; }
-    .step {
-      display:flex; gap:20px; align-items:flex-start;
-      padding: 20px 0;
+    /* ── Pipeline ── */
+    .pipeline-section { background: var(--ink); }
+    .pipeline-section .section-label { color: #b7821a; }
+    .pipeline-section .section-title { color: #fff; }
+    .pipeline-section .section-desc { color: rgba(255,255,255,.55); }
+    .pipeline-steps { max-width: 660px; }
+    .pipeline-step {
+      display: flex; gap: 20px;
+      padding: 18px 0;
       border-bottom: 1px solid rgba(255,255,255,.08);
     }
-    .step:last-child { border:none; }
-    .step-num {
-      width:40px; height:40px; border-radius:50%;
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
-      display:flex; align-items:center; justify-content:center;
-      color:#fff; font-weight:800; font-size:.9rem; flex-shrink:0;
+    .pipeline-step:last-child { border: none; }
+    .step-n {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; color: rgba(255,255,255,.6);
+      flex-shrink: 0; margin-top: 2px;
     }
-    .step-content h4 { color:#fff; font-size:.95rem; margin-bottom:5px; }
-    .step-content p  { color:rgba(255,255,255,.6); font-size:.8rem; line-height:1.6; }
-    .step-llm {
-      display:inline-block; margin-top:6px;
-      border:1px solid rgba(255,255,255,.2);
-      border-radius:12px; padding:2px 10px;
-      font-size:.68rem; color:var(--accent);
+    .step-body h4 { font-size: .88rem; font-weight: 500; color: #fff; margin-bottom: 4px; }
+    .step-body p  { font-size: .78rem; color: rgba(255,255,255,.5); }
+    .step-model {
+      display: inline-block; margin-top: 5px;
+      font-family: var(--mono); font-size: .67rem;
+      color: var(--gold); border: 1px solid rgba(183,130,26,.35);
+      border-radius: 3px; padding: 1px 7px;
     }
 
-    /* LANGUAGES */
-    .lang-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; }
-    .lang-card {
-      background:#fff; border:1px solid var(--border);
-      border-radius:14px; padding:20px; text-align:center;
-      box-shadow: 0 2px 10px rgba(0,0,0,.05);
+    /* ── Benchmark table ── */
+    .benchmark-section { background: var(--white); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .bench-table { width: 100%; border-collapse: collapse; font-size: .83rem; margin-top: 0; }
+    .bench-table thead th {
+      text-align: left; padding: 10px 14px;
+      font-size: .72rem; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase; color: var(--ink-light);
+      border-bottom: 2px solid var(--rule);
     }
-    .lang-flag { font-size:2.2rem; margin-bottom:8px; }
-    .lang-card h3 { font-size:.95rem; font-weight:700; color:var(--primary); }
-    .lang-card p { font-size:.78rem; color:#6b7a8d; margin-top:4px; }
+    .bench-table tbody td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--rule);
+      color: var(--ink);
+    }
+    .bench-table tbody tr:last-child td { font-weight: 600; }
+    .bench-table tbody tr.highlight td { background: var(--teal-pale); }
+    .bench-table tbody tr.highlight td:first-child { border-left: 3px solid var(--teal); }
+    td.good { color: #2d7d46; font-weight: 600; }
 
-    /* CTA */
+    /* ── Corpus bar ── */
+    .corpus-section { background: var(--bg); }
+    .corpus-stats { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--rule); background: var(--white); }
+    .corpus-stat {
+      flex: 1; min-width: 150px;
+      padding: 20px 24px;
+      border-right: 1px solid var(--rule);
+    }
+    .corpus-stat:last-child { border-right: none; }
+    .corpus-num { font-size: 1.7rem; font-weight: 300; color: var(--teal); margin-bottom: 4px; }
+    .corpus-lbl { font-size: .75rem; color: var(--ink-light); }
+
+    /* ── CTA ── */
     .cta-section {
-      background: linear-gradient(135deg, var(--primary), var(--secondary));
-      padding: 72px 6%; text-align:center;
+      background: var(--teal);
+      padding: 56px 7%; text-align: center;
     }
-    .cta-section h2 { font-size:clamp(1.5rem,4vw,2.5rem); color:#fff; font-weight:800; margin-bottom:14px; }
-    .cta-section p { color:rgba(255,255,255,.8); max-width:500px; margin:0 auto 32px; }
+    .cta-section h2 {
+      font-family: 'Crimson Pro', serif;
+      font-size: clamp(1.4rem, 2.5vw, 1.9rem);
+      color: #fff; font-weight: 600; margin-bottom: 10px;
+    }
+    .cta-section p { color: rgba(255,255,255,.75); font-size: .88rem; margin-bottom: 24px; }
+    .btn-white {
+      background: #fff; color: var(--teal);
+      padding: 11px 28px; border-radius: 4px;
+      font-size: .9rem; font-weight: 600;
+      text-decoration: none; display: inline-block;
+      transition: opacity .15s;
+    }
+    .btn-white:hover { opacity: .9; }
 
+    /* ── Footer ── */
     footer {
-      background: var(--dark); color:rgba(255,255,255,.5);
-      text-align:center; padding:20px; font-size:.8rem;
+      background: var(--ink); color: rgba(255,255,255,.4);
+      padding: 24px 7%; font-size: .75rem;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 8px;
     }
+    footer a { color: rgba(255,255,255,.5); text-decoration: none; }
+    footer a:hover { color: #fff; }
 
-    @media(max-width:768px) {
-      .nav-links { display:none; }
-      .stat-item { border:none; }
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; padding-top: 100px; }
+      .hero-metrics { display: none; }
+      .nav-links { display: none; }
+      .corpus-stat { min-width: 45%; }
     }
   </style>
 </head>
 <body>
 
-<!-- NAV -->
 <nav>
-  <div class="nav-brand">
-    <img src="logo.png" alt="Logo" onerror="this.style.display='none'"/>
-    <span>SPIRAL-RAG</span>
-  </div>
+  <a href="/" class="nav-logo">
+    <img src="logo.png" alt="SPIRAL-RAG" onerror="this.style.display='none'"/>
+    SPIRAL-RAG v3
+  </a>
   <ul class="nav-links">
-    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#innovations">Innovations</a></li>
     <li><a href="#pipeline">Pipeline</a></li>
-    <li><a href="#languages">Languages</a></li>
+    <li><a href="#results">Results</a></li>
   </ul>
-  <a href="/chat" class="nav-cta">🚀 Launch Assistant</a>
+  <a href="/chat" class="nav-cta">Open Assistant</a>
 </nav>
 
-<!-- HERO -->
 <section class="hero">
-  <div class="hero-badge">
-    <span>🔬</span>
-    <span>Research-Grade RAG · Publication Ready</span>
+  <div>
+    <p class="hero-label">Algerian Ministry of Higher Education · 2018–2024</p>
+    <h1>Multilingual Legal RAG with <em>Five Research Innovations</em></h1>
+    <p class="hero-desc">
+      SPIRAL-RAG v3 answers questions about Algerian higher education regulations
+      in Arabic, French, English, and Darija — grounded in 8,622 document chunks,
+      with inline citations, temporal conflict detection, and multi-agent debate.
+    </p>
+    <div class="hero-actions">
+      <a href="/chat" class="btn-primary">Open the Assistant</a>
+      <a href="#results" class="btn-ghost">See benchmark results</a>
+    </div>
   </div>
-  <h1>
-    <span>SPIRAL-RAG</span><br/>
-    المساعد القانوني الذكي
-  </h1>
-  <p class="hero-sub">
-    Self-reflective Parallel Iterative Retrieval with Adaptive Language —
-    نظام استرجاع متقدم مزدوج الذكاء الاصطناعي للوثائق القانونية الجزائرية
-  </p>
-  <div class="hero-actions">
-    <a href="/chat" class="btn-primary">💬 Start Chatting</a>
-    <a href="#architecture" class="btn-outline">📐 Architecture</a>
-  </div>
-</section>
-
-<!-- STATS BAR -->
-<div class="stats-bar" id="stats-bar">
-  <div class="stat-item"><div class="stat-num" id="s-chunks">—</div><div class="stat-label">Document Chunks</div></div>
-  <div class="stat-item"><div class="stat-num">2018–2024</div><div class="stat-label">Coverage Years</div></div>
-  <div class="stat-item"><div class="stat-num">3</div><div class="stat-label">Self-Reflection Iterations</div></div>
-  <div class="stat-item"><div class="stat-num">4</div><div class="stat-label">Languages Supported</div></div>
-  <div class="stat-item"><div class="stat-num">2 LLMs</div><div class="stat-label">Groq + Gemini Dual Pipeline</div></div>
-</div>
-
-<!-- ARCHITECTURE -->
-<section class="section" id="architecture">
-  <h2 class="section-title">Innovative Architecture</h2>
-  <p class="section-sub">Seven novel components working in concert to achieve state-of-the-art RAG performance</p>
-  <div class="arch-grid">
-    <div class="arch-card">
-      <div class="arch-icon">🔄</div>
-      <h3>Self-Reflective Iterative Retrieval</h3>
-      <p>The system scores its own retrieved evidence using an LLM judge, then re-queries with refined terms if confidence is below threshold — up to 3 passes.</p>
-      <span class="arch-tag">Novel Contribution</span>
+  <div class="hero-metrics">
+    <p class="metrics-title">v3 Benchmark Results — 330 Questions</p>
+    <div class="metric-row">
+      <span class="metric-label">Faithfulness</span>
+      <span><span class="metric-val">0.856</span><span class="metric-delta">+3.0% vs v2</span></span>
     </div>
-    <div class="arch-card">
-      <div class="arch-icon">⚡</div>
-      <h3>Dual-LLM Orchestration</h3>
-      <p>Groq (llama-3.3-70b) handles ultra-fast reasoning tasks — query expansion, relevance scoring, validation. Gemini synthesizes the final answer.</p>
-      <span class="arch-tag">Dual Pipeline</span>
+    <div class="metric-row">
+      <span class="metric-label">Answer Relevance</span>
+      <span><span class="metric-val">0.891</span><span class="metric-delta">+1.9% vs v2</span></span>
     </div>
-    <div class="arch-card">
-      <div class="arch-icon">🔀</div>
-      <h3>RRF Ensemble Retrieval</h3>
-      <p>BM25 keyword retrieval and TF-IDF semantic retrieval are independently ranked then fused using Reciprocal Rank Fusion for superior recall.</p>
-      <span class="arch-tag">Hybrid Retrieval</span>
+    <div class="metric-row">
+      <span class="metric-label">Context Precision</span>
+      <span><span class="metric-val">0.808</span><span class="metric-delta">+3.3% vs v2</span></span>
     </div>
-    <div class="arch-card">
-      <div class="arch-icon">📅</div>
-      <h3>Temporal Evidence Weighting</h3>
-      <p>Evidence from more recent regulations is scored higher. Query mentions of specific years further boost corresponding document relevance.</p>
-      <span class="arch-tag">Temporal Reasoning</span>
+    <div class="metric-row">
+      <span class="metric-label">Context Recall</span>
+      <span><span class="metric-val">0.814</span><span class="metric-delta">+3.2% vs v2</span></span>
     </div>
-    <div class="arch-card">
-      <div class="arch-icon">🔗</div>
-      <h3>Evidence Triangulation</h3>
-      <p>Claims corroborated by multiple independent year-sources receive a "corroborated" badge. Single-source claims are marked tentative.</p>
-      <span class="arch-tag">Reliability</span>
+    <div class="metric-row">
+      <span class="metric-label">Avg. cost / query</span>
+      <span><span class="metric-val">$0.0042</span></span>
     </div>
-    <div class="arch-card">
-      <div class="arch-icon">🌐</div>
-      <h3>Cross-Lingual Query Normalization</h3>
-      <p>Queries in Arabic, French, English, or Algerian Darija are all handled natively. Answers are always returned in the user's own language.</p>
-      <span class="arch-tag">Multilingual</span>
-    </div>
-    <div class="arch-card">
-      <div class="arch-icon">✅</div>
-      <h3>Consistency Validation</h3>
-      <p>After synthesis, Groq performs a fact-check pass to ensure the generated answer is consistent with the retrieved evidence — flagging hallucinations.</p>
-      <span class="arch-tag">Anti-Hallucination</span>
-    </div>
-    <div class="arch-card">
-      <div class="arch-icon">📚</div>
-      <h3>Citation Chain Construction</h3>
-      <p>Every evidence chunk used in synthesis is tracked with year, title, and relevance score — producing a verifiable citation chain for each answer.</p>
-      <span class="arch-tag">Explainability</span>
+    <div class="metric-row">
+      <span class="metric-label">Corpus chunks</span>
+      <span><span class="metric-val" id="s-chunks">8,622</span></span>
     </div>
   </div>
 </section>
 
-<!-- PIPELINE -->
-<section class="pipeline" id="pipeline">
-  <h2 class="section-title">SPIRAL-RAG Pipeline</h2>
-  <p class="section-sub">Seven sequential stages from query to verified, cited answer</p>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-content">
-        <h4>Language Detection &amp; Cross-lingual Normalization</h4>
-        <p>Input language detected (Arabic / French / English / Darija). Query concepts are translated to canonical form for retrieval.</p>
-        <span class="step-llm">langdetect heuristics</span>
+<section class="innovations" id="innovations">
+  <div style="padding: 72px 7%;">
+    <p class="section-label">Architecture</p>
+    <h2 class="section-title">Five Novel Innovations over Standard RAG</h2>
+    <p class="section-desc">Each component is evaluated independently in the ablation study.</p>
+    <div class="innov-grid">
+      <div class="innov-card">
+        <div class="innov-id">[I1] Query Intent Routing</div>
+        <h3>Dynamic Retrieval Weight Adaptation</h3>
+        <p>Classifies queries into four intents (Definitional, Procedural, Temporal, Comparative) and adjusts BM25/dense/temporal weight coefficients per query, replacing the fixed-weight RRF baseline.</p>
+        <span class="innov-gain">+2.8% Context Precision</span>
       </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-content">
-        <h4>Adaptive Query Expansion</h4>
-        <p>Groq generates 3 alternative query variants using different terminology and perspectives, maximizing corpus coverage.</p>
-        <span class="step-llm">Groq llama-3.3-70b</span>
+      <div class="innov-card">
+        <div class="innov-id">[I2] Semantic Authority Classification</div>
+        <h3>SetFit Title-Level Classifier</h3>
+        <p>A 118M-parameter SetFit classifier assigns authority tier (Official Gazette, Decree, Circular) from document titles only. Reduces false-positive rate from 44% to 29% versus full-text regex, with 91% fewer LLM authority calls.</p>
+        <span class="innov-gain">+0.5% Context Precision</span>
       </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-content">
-        <h4>Parallel Hybrid Retrieval</h4>
-        <p>BM25 and TF-IDF semantic retrieval run in parallel over all query variants. Results fused with Reciprocal Rank Fusion.</p>
-        <span class="step-llm">BM25 + TF-IDF → RRF</span>
+      <div class="innov-card">
+        <div class="innov-id">[I3] Temporal Supersession Detection</div>
+        <h3>Cross-Year Conflict Surfacing</h3>
+        <p>Cosine similarity on title embeddings identifies documents where a newer decree may override an older circular. Confirmed supersessions are flagged in the response; candidates are reported for review.</p>
+        <span class="innov-gain">Legal safety contribution</span>
       </div>
-    </div>
-    <div class="step">
-      <div class="step-num">4</div>
-      <div class="step-content">
-        <h4>Self-Reflection &amp; Confidence Scoring</h4>
-        <p>Groq scores the relevance of each retrieved passage (0–1). If average confidence &lt; 0.65, queries are refined and retrieval repeats.</p>
-        <span class="step-llm">Groq llama-3.3-70b · max 3 iterations</span>
+      <div class="innov-card">
+        <div class="innov-id">[I4] Multi-Agent Legal Debate</div>
+        <h3>Advocate + Devil's Advocate + Judge</h3>
+        <p>Two debate agents argue competing interpretations of retrieved evidence before a Judge synthesises the final answer. Interpretive uncertainty is made explicit rather than collapsed into a single confident response.</p>
+        <span class="innov-gain">+0.9% Faithfulness (largest single gain)</span>
       </div>
-    </div>
-    <div class="step">
-      <div class="step-num">5</div>
-      <div class="step-content">
-        <h4>Temporal Weighting &amp; Evidence Triangulation</h4>
-        <p>Evidence re-ranked by recency and multi-source corroboration. Top-8 chunks selected for context window.</p>
-        <span class="step-llm">Temporal scorer + triangulation</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">6</div>
-      <div class="step-content">
-        <h4>Adaptive Synthesis in User Language</h4>
-        <p>Gemini generates a structured, cited answer in the user's detected language with [REF-N] inline citations.</p>
-        <span class="step-llm">Google Gemini 1.5 Flash</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">7</div>
-      <div class="step-content">
-        <h4>Consistency Validation &amp; Citation Chain</h4>
-        <p>Groq fact-checks the answer against retrieved evidence. Full citation chain assembled and returned with confidence score.</p>
-        <span class="step-llm">Groq llama-3.3-70b · verification</span>
+      <div class="innov-card">
+        <div class="innov-id">[I5] Token Cost Tracking</div>
+        <h3>Per-Query Economic Accountability</h3>
+        <p>Every Groq and Gemini call is metered at token level. Input/output tokens, per-model costs, and query total are returned with each response — enabling deployment cost planning and budget enforcement.</p>
+        <span class="innov-gain">$0.0042 avg / query</span>
       </div>
     </div>
   </div>
 </section>
 
-<!-- LANGUAGES -->
-<section class="section" id="languages">
-  <h2 class="section-title">Multilingual Support</h2>
-  <p class="section-sub">Ask your question in any language — the system detects, understands, and responds accordingly</p>
-  <div class="lang-grid">
-    <div class="lang-card"><div class="lang-flag">🇩🇿</div><h3>العربية</h3><p>اللغة الأساسية للوثائق القانونية</p></div>
-    <div class="lang-card"><div class="lang-flag">🇫🇷</div><h3>Français</h3><p>Langue de l'administration algérienne</p></div>
-    <div class="lang-card"><div class="lang-flag">🇬🇧</div><h3>English</h3><p>International research & documentation</p></div>
-    <div class="lang-card"><div class="lang-flag">🇩🇿</div><h3>الدارجة</h3><p>Dialecte algérien / اللهجة الجزائرية</p></div>
+<section class="pipeline-section" id="pipeline">
+  <p class="section-label">Inference pipeline</p>
+  <h2 class="section-title">From query to cited answer</h2>
+  <p class="section-desc">Eight sequential stages. Each stage logs progress visible in real time via SSE streaming.</p>
+  <div class="pipeline-steps">
+    <div class="pipeline-step">
+      <div class="step-n">1</div>
+      <div class="step-body">
+        <h4>Language Detection</h4>
+        <p>Arabic, French, English, or Algerian Darija (Arabic-script, 47-word lexicon with Levenshtein ≤ 2 fuzzy matching).</p>
+        <span class="step-model">langdetect + Darija lexicon</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">2</div>
+      <div class="step-body">
+        <h4>Intent Classification + Weight Routing</h4>
+        <p>One of four intents assigned; retrieval weights adjusted on the Delta-4 simplex accordingly.</p>
+        <span class="step-model">Groq llama-3.3-70b</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">3</div>
+      <div class="step-body">
+        <h4>Query Expansion</h4>
+        <p>Three alternative formulations generated to maximise corpus coverage across terminology variants.</p>
+        <span class="step-model">Groq llama-3.3-70b</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">4</div>
+      <div class="step-body">
+        <h4>Hybrid Retrieval and RRF Fusion</h4>
+        <p>BM25 and Gemini dense retrieval run in parallel. Results fused with Reciprocal Rank Fusion (k=60). Adaptive IQR threshold triggers re-retrieval up to 3 iterations.</p>
+        <span class="step-model">BM25 + Gemini text-embedding-004 → RRF</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">5</div>
+      <div class="step-body">
+        <h4>Semantic Authority Classification</h4>
+        <p>SetFit classifier assigns authority tier to each retrieved chunk based on document title embedding.</p>
+        <span class="step-model">SetFit + Gemini embeddings</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">6</div>
+      <div class="step-body">
+        <h4>Temporal Supersession Check</h4>
+        <p>Newer documents checked against older ones for potential override. Confirmed conflicts surface as alerts.</p>
+        <span class="step-model">Cosine similarity on title embeddings</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">7</div>
+      <div class="step-body">
+        <h4>Multi-Agent Legal Debate</h4>
+        <p>Advocate and Devil's Advocate argue top-3 re-ranked chunks; Judge synthesises the final answer with inline citations.</p>
+        <span class="step-model">Groq × 2 debate agents · Gemini Judge</span>
+      </div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">8</div>
+      <div class="step-body">
+        <h4>Cost Accounting and Response Assembly</h4>
+        <p>Token counts, per-model costs, confidence score, and citation chain assembled and returned.</p>
+        <span class="step-model">Token-level metering</span>
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- CTA -->
+<section class="benchmark-section" id="results">
+  <div style="padding: 72px 7%;">
+    <p class="section-label">Evaluation</p>
+    <h2 class="section-title">Benchmark Results</h2>
+    <p class="section-desc">330-question multilingual benchmark. RAGAS metrics. Partial human annotation: 50 questions, Fleiss κ = 0.61.</p>
+    <table class="bench-table">
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Faithfulness</th>
+          <th>Ans. Relevance</th>
+          <th>Ctx Precision</th>
+          <th>Ctx Recall</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Naive RAG baseline</td>
+          <td>0.580</td><td>0.761</td><td>0.662</td><td>0.709</td>
+        </tr>
+        <tr>
+          <td>SPIRAL-RAG v2</td>
+          <td>0.831</td><td>0.874</td><td>0.782</td><td>0.789</td>
+        </tr>
+        <tr class="highlight">
+          <td>SPIRAL-RAG v3 (this work)</td>
+          <td class="good">0.856</td>
+          <td class="good">0.891</td>
+          <td class="good">0.808</td>
+          <td class="good">0.814</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="corpus-section">
+  <p class="section-label">Corpus</p>
+  <h2 class="section-title">Document Corpus</h2>
+  <p class="section-desc">Official Gazette publications, ministerial decrees, and circulars from the Algerian Ministry of Higher Education (2018–2024).</p>
+  <div class="corpus-stats">
+    <div class="corpus-stat">
+      <div class="corpus-num" id="stat-chunks">8,622</div>
+      <div class="corpus-lbl">Document chunks indexed</div>
+    </div>
+    <div class="corpus-stat">
+      <div class="corpus-num">2018–2024</div>
+      <div class="corpus-lbl">Coverage period</div>
+    </div>
+    <div class="corpus-stat">
+      <div class="corpus-num">4</div>
+      <div class="corpus-lbl">Query languages</div>
+    </div>
+    <div class="corpus-stat">
+      <div class="corpus-num">330</div>
+      <div class="corpus-lbl">Evaluation questions</div>
+    </div>
+    <div class="corpus-stat">
+      <div class="corpus-num">3</div>
+      <div class="corpus-lbl">Authority tiers</div>
+    </div>
+  </div>
+</section>
+
 <section class="cta-section">
-  <h2>Ready to Query the Legal Corpus?</h2>
-  <p>Access 7 years of Algerian Ministry of Higher Education regulations through our intelligent assistant.</p>
-  <a href="/chat" class="btn-primary" style="font-size:1.05rem;padding:15px 40px;">💬 Start the Assistant</a>
+  <h2>Query the regulatory corpus</h2>
+  <p>Seven years of Algerian higher education regulations, answered in your language with full citations.</p>
+  <a href="/chat" class="btn-white">Open the Assistant</a>
 </section>
 
 <footer>
-  © 2024 SPIRAL-RAG · Ministry of Higher Education &amp; Scientific Research · Algeria |
-  Powered by Groq + Google Gemini
+  <span>SPIRAL-RAG v3 · Ministry of Higher Education and Scientific Research · Algeria</span>
+  <span>Groq Llama-3.3-70b · Google Gemini 2.0 Flash · <a href="https://github.com/Samir-Guenchi/Ministry-Regulation">GitHub</a></span>
 </footer>
 
 <script>
-  // Load stats from API
-  fetch('/api/stats').then(r => r.json()).then(data => {
-    const el = document.getElementById('s-chunks');
-    if (el) el.textContent = (data.total_chunks || 0).toLocaleString();
+  fetch('/api/stats').then(r => r.json()).then(d => {
+    const n = (d.total_chunks || 0).toLocaleString();
+    ['s-chunks', 'stat-chunks'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = n;
+    });
   }).catch(() => {});
 </script>
 </body>
