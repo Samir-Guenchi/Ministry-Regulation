@@ -18,6 +18,12 @@ from typing import List, Dict, Tuple, Optional
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field
 
+try:
+    from thefuzz import fuzz as _fuzz
+    _FUZZ_AVAILABLE = True
+except ImportError:
+    _FUZZ_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".embed_cache")
@@ -319,6 +325,7 @@ class DenseRetriever:
                         logger.warning("[DenseRetriever] Embedding API access denied (403). "
                                        "Running in BM25-only mode.")
                         api_unavailable = True
+                        DenseRetriever._embed_api_blocked = True  # propagate immediately
                         break
                     logger.warning(f"Embed batch {start}: attempt {attempt+1} failed: {e}")
                     time.sleep(2 ** attempt)
@@ -345,18 +352,26 @@ class DenseRetriever:
         mode = "BM25-only (embedding API unavailable)" if api_unavailable else "BM25 + Dense"
         logger.info(f"[DenseRetriever] Ready — retrieval mode: {mode}")
 
+    # Session-level flag: if Gemini returns 403 once, skip all future attempts.
+    _embed_api_blocked = False
+
     def _embed_query(self, query: str) -> np.ndarray:
-        for attempt in range(3):
-            try:
-                result = self._genai.embed_content(
-                    model=self.MODEL,
-                    content=query,
-                    task_type="retrieval_query"
-                )
-                return np.array(result["embedding"], dtype=np.float32)
-            except Exception as e:
-                logger.warning(f"Query embedding attempt {attempt+1} failed: {e}")
-                time.sleep(1.5 ** attempt)
+        if DenseRetriever._embed_api_blocked:
+            return np.zeros(self.EMBED_DIM, dtype=np.float32)
+        try:
+            result = self._genai.embed_content(
+                model=self.MODEL,
+                content=query,
+                task_type="retrieval_query"
+            )
+            return np.array(result["embedding"], dtype=np.float32)
+        except Exception as e:
+            err = str(e)
+            if "403" in err or "denied access" in err.lower() or "permission" in err.lower():
+                DenseRetriever._embed_api_blocked = True
+                logger.warning("[DenseRetriever] Embedding API blocked (403) — switching to BM25-only mode for this session.")
+            else:
+                logger.warning(f"Query embedding failed: {e}")
         return np.zeros(self.EMBED_DIM, dtype=np.float32)
 
     def retrieve(self, query: str, top_k=25) -> List[Tuple[Chunk, float]]:
@@ -851,7 +866,8 @@ class GeminiSynthesizer:
     def __init__(self):
         import google.generativeai as genai
         genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        # gemini-1.5-flash: 1500 free-tier requests/day (vs 0 for 2.0-flash)
+        self.model = genai.GenerativeModel("gemini-1.5-flash")
 
     def generate(
         self,
@@ -1002,6 +1018,29 @@ Final Answer in {lang_name}:"""
             judge_prompt, max_tokens=1400,
             tracker=tracker, call_type="judge_synthesis"
         )
+
+        # ── Groq fallback if Gemini quota exceeded or returns empty ─────
+        if not final_answer or len(final_answer.strip()) < 20:
+            logger.warning("[MALD] Gemini returned empty — falling back to Groq for Judge synthesis")
+            groq_judge_sys = (
+                f"You are a senior Judge specialising in Algerian higher education law. "
+                f"Answer ENTIRELY in {lang_name}. Be clear, accurate, and cite [REF-N] references inline."
+            )
+            groq_judge_user = (
+                f"Query intent: {intent_label}\n"
+                f"Confidence: {confidence:.0%}\n\n"
+                f"ADVOCATE ARGUMENT:\n{advocate_arg}\n\n"
+                f"DEVIL'S ADVOCATE COUNTER-ARGUMENT:\n{devil_arg}\n\n"
+                f"LEGAL EVIDENCE:\n{ctx_judge}\n\n"
+                f"Weigh both arguments. Use [REF-N] inline citations. "
+                f"{'Acknowledge interpretive conflict.' if has_conflict else 'Confirm dominant interpretation.'} "
+                f"Answer in {lang_name}:"
+            )
+            final_answer = self.groq.chat(
+                groq_judge_sys, groq_judge_user,
+                max_tokens=900, temperature=0.25,
+                tracker=tracker, call_type="judge_synthesis_fallback"
+            )
 
         debate_summary = {
             "advocate":    advocate_arg[:350] + ("…" if len(advocate_arg) > 350 else ""),
@@ -1338,10 +1377,11 @@ class SpiralRAG:
                 "processing_time_ms": round((time.time() - t0) * 1000, 1)
             }
 
-        # [W6] Null/unanswerable detection: low confidence means the corpus
-        # lacks relevant information — return a safe refusal instead of
-        # hallucinating an answer from irrelevant retrieved text.
-        NULL_CONFIDENCE_THRESHOLD = 0.22
+        # [W6] Null/unanswerable detection.
+        # Threshold is lower when running BM25-only (dense unavailable) because
+        # LLM relevance scores are intrinsically lower without dense signal.
+        bm25_only = DenseRetriever._embed_api_blocked
+        NULL_CONFIDENCE_THRESHOLD = 0.08 if bm25_only else 0.22
         if confidence < NULL_CONFIDENCE_THRESHOLD:
             null_msgs = {
                 "ar": "عذراً، لم أجد في الوثائق المتاحة ما يكفي للإجابة على سؤالك بثقة. "
@@ -1398,6 +1438,19 @@ class SpiralRAG:
         )
         _emit("🧑‍⚖️ Judge synthesis complete (Gemini) [I4]")
 
+        # 7b. Citation hallucination verification
+        # Build ref→chunk_text mapping from the ranked evidence used in synthesis
+        chunks_by_ref = {}
+        top_evidence = self._rank_evidence(all_evidence, intent_weights)[:self.TOP_K_FINAL]
+        for i, ev in enumerate(top_evidence):
+            chunks_by_ref[i + 1] = ev.chunk.content
+        final_answer, citations = verify_citations(final_answer, citations, chunks_by_ref)
+        stripped = sum(1 for c in citations if c.get("verified") is False)
+        if stripped:
+            _emit(f"⚠️ Citation verifier: {stripped} hallucinated ref(s) stripped")
+        else:
+            _emit("✅ Citation verifier: all inline refs grounded in source chunks")
+
         # 8. Consistency validation
         verdict, is_consistent = self._validate(
             final_answer, user_query, context, tracker=tracker
@@ -1447,6 +1500,81 @@ class SpiralRAG:
             "debate_summary":       debate_summary,       # [I4]
             "cost_estimate":        cost_summary,         # [I5]
         }
+
+
+# ─────────────────────────────────────────────
+#  Citation Hallucination Verifier
+#  Checks each [REF-N] tag in the Judge output against the actual
+#  retrieved chunk text using fuzzy token matching. Strips or flags
+#  any citation whose claimed content cannot be found in the source.
+# ─────────────────────────────────────────────
+
+def verify_citations(
+    judge_output: str,
+    citations: List[Dict],
+    chunks_by_ref: Dict[int, str],
+    threshold: int = 62
+) -> Tuple[str, List[Dict]]:
+    """
+    Returns (cleaned_answer, updated_citations_list).
+    Any [REF-N] whose sentence content does not fuzzy-match the chunk
+    (token_set_ratio < threshold) is removed from the inline text and
+    flagged in the citations list with verified=False.
+    """
+    if not _FUZZ_AVAILABLE or not chunks_by_ref:
+        for c in citations:
+            c["verified"] = None   # verifier unavailable
+        return judge_output, citations
+
+    # Track which refs were actually used and verified
+    ref_verified: Dict[int, bool] = {}
+
+    # Split on sentence boundaries (keep Arabic / French text intact)
+    sentence_pat = re.compile(r'(?<=[.!?؟])\s+')
+    sentences = sentence_pat.split(judge_output)
+    cleaned = []
+
+    for sent in sentences:
+        refs_in_sent = re.findall(r'\[REF-(\d+)\]', sent)
+        if not refs_in_sent:
+            cleaned.append(sent)
+            continue
+
+        # Strip ref tags to get the bare claim text
+        claim = re.sub(r'\[REF-\d+\]', '', sent).strip()
+        new_sent = sent
+
+        for ref_str in refs_in_sent:
+            ref_id = int(ref_str)
+            chunk_text = chunks_by_ref.get(ref_id, "")
+
+            if not chunk_text:
+                # Hard hallucination: REF number beyond retrieved set
+                new_sent = new_sent.replace(f'[REF-{ref_id}]', '')
+                ref_verified[ref_id] = False
+                logger.warning(f"[CitationVerifier] [REF-{ref_id}] stripped — chunk not found (hallucinated ref)")
+                continue
+
+            score = _fuzz.token_set_ratio(claim, chunk_text[:800])
+            if score < threshold:
+                new_sent = new_sent.replace(f'[REF-{ref_id}]', '')
+                ref_verified[ref_id] = False
+                logger.warning(f"[CitationVerifier] [REF-{ref_id}] stripped — fuzzy score {score} < {threshold}")
+            else:
+                ref_verified[ref_id] = True
+
+        cleaned.append(re.sub(r'\s{2,}', ' ', new_sent).strip())
+
+    # Annotate citations list
+    for c in citations:
+        ref_num_match = re.search(r'REF-(\d+)', c.get("ref", ""))
+        if ref_num_match:
+            n = int(ref_num_match.group(1))
+            c["verified"] = ref_verified.get(n, True)   # unseen = not stripped = ok
+        else:
+            c["verified"] = True
+
+    return " ".join(cleaned), citations
 
 
 # ─────────────────────────────────────────────
